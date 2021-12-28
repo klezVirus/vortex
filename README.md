@@ -4,7 +4,7 @@ VPN Overall Reconnaissance, Testing, Enumeration and Exploitation Toolkit
 
 ## Overview
 
-A very simple Python framework, inspired by [SprayingToolkit][1] that tries to 
+A very simple Python framework, inspired by [SprayingToolkit][1], that tries to 
 automate most of the process required to detect, enumerate and attack common O365 
 and VPN endpoints (like Cisco, Citrix, Fortinet, Pulse, etc...).
 
@@ -63,8 +63,8 @@ sudo -H pip3 install -r requirements.txt
 Otherwise, you can install the pre-requisites using a virtual environment:
 
 ```
-virtualenv vpn-spray
-venv venv\Scripts\activate
+virtualenv venv
+venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
