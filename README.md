@@ -4,7 +4,7 @@ VPN Overall Reconnaissance, Testing, Enumeration and Exploitation Toolkit
 
 ## Overview
 
-A very simple Python framework, inspired by [Spraying Toolkit][1] that tries to 
+A very simple Python framework, inspired by [SprayingToolkit][1] that tries to 
 automate most of the process required to detect, enumerate and attack common O365 
 and VPN endpoints (like Cisco, Citrix, Fortinet, Pulse, etc...).
 
@@ -630,8 +630,10 @@ Please submit bugs, suggestions, or feature requests.
 
 ## Credits
 
-* [byt3bl33d3r](https://twitter.com/byt3bl33d3r): For his amazing work on [SprayingToolkit](https://github.com/byt3bl33d3r/SprayingToolkit). which inspired the project
+* [byt3bl33d3r](https://twitter.com/byt3bl33d3r): For his amazing work on [SprayingToolkit][1]. which inspired the project
 * [nodauf](https://twitter.com/nodauf): For his work on [GoMapEnum](https://github.com/nodauf/GoMapEnum), which gave me other ideas
 * [quasart](https://github.com/quasart): The logo was generated with [spiral](https://github.com/quasart/spiral)
 * [m8r0wn](https://twitter.com/m8r0wn): For his work on [CrossLinked](https://github.com/m8r0wn/CrossLinked), which is really an awesome tool
 * [Greyjedix](https://github.com/Greyjedix/): For his work on [Profil3r](https://github.com/Greyjedix/Profil3r)
+
+[1]: https://github.com/byt3bl33d3r/SprayingToolkit
