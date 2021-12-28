@@ -634,6 +634,6 @@ Please submit bugs, suggestions, or feature requests.
 * [nodauf](https://twitter.com/nodauf): For his work on [GoMapEnum](https://github.com/nodauf/GoMapEnum), which gave me other ideas
 * [quasart](https://github.com/quasart): The logo was generated with [spiral](https://github.com/quasart/spiral)
 * [m8r0wn](https://twitter.com/m8r0wn): For his work on [CrossLinked](https://github.com/m8r0wn/CrossLinked), which is really an awesome tool
-* [Greyjedix](https://github.com/Greyjedix/): For his work on [Profil3r](https://github.com/Greyjedix/Profil3r)
+* [Greyjedix](https://github.com/Greyjedix/): For his work on [Profil3r](https://github.com/Greyjedix/Profil3r), which is very useful tool in certain circumstances
 
 [1]: https://github.com/byt3bl33d3r/SprayingToolkit
