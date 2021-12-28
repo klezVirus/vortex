@@ -1,6 +1,7 @@
 import argparse
 import configparser
 import os
+from pathlib import Path
 
 import requests
 from colorama import Fore
@@ -14,9 +15,13 @@ class Manager:
     def __init__(self):
         self.config = configparser.ConfigParser(allow_no_value=True, interpolation=configparser.ExtendedInterpolation())
         self.config.read(get_project_root().joinpath("config", "config.ini"))
+        workspaces = get_project_root().joinpath("data", "workspaces")
+        temp = get_project_root().joinpath("data", "temp")
+        workspaces.mkdir(exist_ok=True)
+        temp.mkdir(exist_ok=True)
 
     def run(self, _action, _workspace, **kwargs):
-        kwargs["config"] = get_project_root().joinpath("config", "zzz_doosan/config.ini")
+        kwargs["config"] = get_project_root().joinpath("config", "config.ini")
         action_class = Action.from_name(_action)
         if not action_class:
             error(f"Unknown action: {_action}")

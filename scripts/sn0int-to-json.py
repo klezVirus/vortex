@@ -2,7 +2,7 @@ import json
 
 leaks = []
 leak = {}
-with open("../zzz_doosan/leaked.txt") as infile:
+with open("../leaked.txt") as infile:
     uid = None
     mail = None
     creds = []
@@ -18,5 +18,5 @@ with open("../zzz_doosan/leaked.txt") as infile:
             cred = line.split(" ")[1].replace("\"", "").replace("\n", "").strip(" ()")
             creds.append(cred)
 
-with open("../zzz_doosan/leaked.json", "w") as outfile:
+with open("../leaked.json", "w") as outfile:
     json.dump(leaks, outfile)
