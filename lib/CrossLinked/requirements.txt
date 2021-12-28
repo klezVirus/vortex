@@ -1,0 +1,5 @@
+bs4
+taser>=0.3.3
+unidecode
+requests
+argparse

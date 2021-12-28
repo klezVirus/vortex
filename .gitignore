@@ -1,0 +1,11 @@
+__pycache__
+.idea
+wiki/
+*.db
+!tor/
+zzz_doosan/
+.google-cookie
+.session
+vpn-enum.py
+*.drawio
+reports

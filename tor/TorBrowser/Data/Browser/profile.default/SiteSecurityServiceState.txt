@@ -1,0 +1,6 @@
+firefox.settings.services.mozilla.com:HSTS	3	18982	1671636025412,1,0,2
+versioncheck-bg.addons.mozilla.org:HSTS	3	18982	1640100443392,1,0,2
+cdn-fastly.torproject.org:HSTS	0	18964	1646295212477,1,0,2
+addons.cdn.mozilla.net:HSTS	0	18964	1670055721676,1,1,2
+aus1.torproject.org:HSTS	3	18982	1655867904214,1,0,2
+cdn.torproject.org:HSTS	0	18964	1654287212124,1,0,2
