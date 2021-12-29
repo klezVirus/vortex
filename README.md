@@ -62,9 +62,19 @@ sudo -H pip3 install -r requirements.txt
 
 Otherwise, you can install the pre-requisites using a virtual environment:
 
+###### On Windows
+
 ```
 virtualenv venv
 venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+###### On Linux
+
+```
+python3 -m virtualenv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -320,7 +330,9 @@ tyrell.wellick@evilcorp.com
 
 This source is operated using a ported version of the one implemented in [sn0int](https://github.com/kpcyrd/sn0int).
 
-Note that this functionality requires to be connected to the TOR network. 
+**Note**: this functionality requires to be connected to the TOR network. On Windows, it is possible to use the embedded
+version provided with Vortex. On Linux, instead, it is necessary to install the tor package (i.e. `sudo apt-get install tor` on Kali).
+
 
 ##### Start TOR
 

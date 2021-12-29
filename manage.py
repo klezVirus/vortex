@@ -59,7 +59,8 @@ def print_logo():
 
 if __name__ == '__main__':
     requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-    os.system('color')
+    if os.name == 'nt':
+        os.system('color')
     print_logo()
     parser = argparse.ArgumentParser(description="Vortex: VPN Overall Reconnaissance, Enumeration and eXploitation")
 
