@@ -1,4 +1,6 @@
 import configparser
+import os
+from pathlib import Path
 
 import psutil
 
@@ -11,6 +13,7 @@ from utils.utils import get_project_root, info, debug, error
 class Tor(Action):
     def __init__(self, workspace=None):
         super().__init__(workspace)
+        self.win = os.name == "nt"
         self.commands = ["start", "stop", "install", "change-pwd"]
         self.__rc = r"""
 SOCKSPort 9150
@@ -19,9 +22,23 @@ ControlPort 9151
 HashedControlPassword ####PASSWORD####
 CookieAuthentication 1
 """
-        self.tor = get_project_root().joinpath("tor", "TorBrowser", "Tor", "tor.exe").absolute()
-        self.tor_rc = get_project_root().joinpath("tor", "torrc").absolute()
-        self.firefox = get_project_root().joinpath("tor").joinpath("firefox.exe")
+        if self.win:
+            self.tor = get_project_root().joinpath("tor", "TorBrowser", "Tor", "tor.exe").absolute()
+            self.tor_rc = get_project_root().joinpath("tor", "torrc").absolute()
+            self.firefox = get_project_root().joinpath("tor").joinpath("firefox.exe")
+        else:
+            self.tor_rc = Path("/etc/tor/torrc")
+            try:
+                output = subprocess.check_output(
+                    "which tor",
+                    shell=True
+                )
+                self.tor = output.decode().strip()
+                self.firefox = ""
+            except subprocess.CalledProcessError:
+                error("Tor not found. Please install it or add it to PATH")
+                exit(1)
+
         self.config = configparser.ConfigParser(allow_no_value=True, interpolation=configparser.ExtendedInterpolation())
         self.config.read(str(get_project_root().joinpath("config", "config.ini").absolute()))
 
@@ -42,6 +59,9 @@ CookieAuthentication 1
             rc_file.write(self.__rc.replace("####PASSWORD####", password))
 
     def install(self):
+        if not self.win:
+            error("Install: Not supported on non-Windows platforms")
+            return
         if not self.tor_rc.is_file():
             self.update_rc(password=self.config.get("TOR", "ctrl_password"))
         cmd = f"\"{self.tor}\" --service uninstall"
@@ -52,12 +72,18 @@ CookieAuthentication 1
         print(output)
 
     def stop(self):
-        for p in psutil.process_iter():
+        if self.win:
+            for p in psutil.process_iter():
+                try:
+                    if p.name().lower() == "firefox.exe":
+                        if p.cwd() == str(get_project_root()):
+                            p.kill()
+                except:
+                    pass
+        else:
             try:
-                if p.name().lower() == "firefox.exe":
-                    if p.cwd() == str(get_project_root()):
-                        p.kill()
-            except:
+                subprocess.check_call("sudo killall tor", shell=True)
+            except subprocess.CalledProcessError:
                 pass
 
     def execute(self, **kwargs):
@@ -66,8 +92,12 @@ CookieAuthentication 1
             command = self.choose_command()
 
         if command == "start":
-            info("Starting TOR Browser, click on connect")
-            subprocess.Popen(self.firefox, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, close_fds=True)
+            if self.win:
+                info("Starting TOR Browser, click on connect")
+                subprocess.Popen(self.firefox, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, close_fds=True)
+            else:
+                info("Starting TOR, give it a few seconds to connect")
+                subprocess.Popen(self.tor, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL, close_fds=True)
 
         elif command == "stop":
             info("Stopping TOR browser")

@@ -1,16 +1,16 @@
-# Tor state file last generated on 2021-12-27 09:45:31 local time
+# Tor state file last generated on 2021-12-29 10:25:33 local time
 # Other times below are in UTC
 # You *do not* need to edit this file.
 
 CircuitBuildTimeBin 125 3
-CircuitBuildTimeBin 175 42
+CircuitBuildTimeBin 175 43
 CircuitBuildTimeBin 225 49
 CircuitBuildTimeBin 275 37
 CircuitBuildTimeBin 325 26
 CircuitBuildTimeBin 375 14
 CircuitBuildTimeBin 425 12
 CircuitBuildTimeBin 475 14
-CircuitBuildTimeBin 525 6
+CircuitBuildTimeBin 525 7
 CircuitBuildTimeBin 575 3
 CircuitBuildTimeBin 625 2
 CircuitBuildTimeBin 675 1
@@ -20,7 +20,7 @@ CircuitBuildTimeBin 975 1
 CircuitBuildTimeBin 42325 1
 CircuitBuildAbandonedCount 2
 Dormant 0
-Guard in=default rsa_id=ED9A731373456FA071C12A3E63E2C8BEF0A6E721 nickname=StayStrongRelay01 sampled_on=2021-11-27T00:05:28 sampled_idx=0 sampled_by=0.4.4.5 listed=1 confirmed_on=2021-11-29T09:33:20 confirmed_idx=0 pb_use_attempts=98.000000 pb_use_successes=98.000000 pb_circ_attempts=210.000000 pb_circ_successes=207.000000 pb_successful_circuits_closed=207.000000 pb_timeouts=3.000000
+Guard in=default rsa_id=ED9A731373456FA071C12A3E63E2C8BEF0A6E721 nickname=StayStrongRelay01 sampled_on=2021-11-27T00:05:28 sampled_idx=0 sampled_by=0.4.4.5 listed=1 confirmed_on=2021-11-29T09:33:20 confirmed_idx=0 pb_use_attempts=99.000000 pb_use_successes=99.000000 pb_circ_attempts=212.000000 pb_circ_successes=209.000000 pb_successful_circuits_closed=209.000000 pb_timeouts=3.000000
 Guard in=default rsa_id=9BB9F938E442F57A8F509CBBA963FC80D0BB9963 nickname=OasisWorld sampled_on=2021-12-02T20:43:08 sampled_idx=1 sampled_by=0.4.4.5 listed=1 confirmed_on=2021-11-22T10:22:07 confirmed_idx=2 pb_circ_attempts=1.000000 pb_circ_successes=1.000000 pb_successful_circuits_closed=1.000000
 Guard in=default rsa_id=3D5D6178C44537E3692853B344385F6572A55767 nickname=TorZabehlice sampled_on=2021-11-25T22:02:55 sampled_idx=2 sampled_by=0.4.4.5 listed=1 confirmed_on=2021-11-25T14:42:27 confirmed_idx=1
 Guard in=default rsa_id=9CC3E9C1F4196D4F11F2B815F8EA0B630A1FCC88 nickname=BigDaddy sampled_on=2021-11-24T18:29:42 sampled_idx=3 sampled_by=0.4.4.5 listed=1 confirmed_on=2021-11-30T05:26:18 confirmed_idx=3
@@ -41,6 +41,6 @@ Guard in=default rsa_id=8E7ACAD878BBD61097C0E0D557160F5D59BCE5CA nickname=lightb
 Guard in=default rsa_id=9FD8AF6546A248A4C7F07A79325496015D799195 nickname=plithismos sampled_on=2021-11-30T05:55:32 sampled_idx=18 sampled_by=0.4.4.5 listed=1
 Guard in=default rsa_id=BD1C8CA61A53826A7C33885A7586F9FA13CE7944 nickname=qwertz2 sampled_on=2021-12-02T00:57:59 sampled_idx=19 sampled_by=0.4.4.5 listed=1
 Guard in=default rsa_id=D34BE271B84630D5E08D0407419CDEBD2C931118 nickname=straDEicebeer01 sampled_on=2021-12-04T12:55:07 sampled_idx=20 sampled_by=0.4.4.5 listed=1
-LastWritten 2021-12-27 09:45:31
+LastWritten 2021-12-29 10:25:33
 TorVersion Tor 0.4.4.5 (git-24e808e946e741d0)
-TotalBuildTimes 215
+TotalBuildTimes 217
