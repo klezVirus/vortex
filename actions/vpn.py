@@ -29,6 +29,9 @@ class Vpn(Action):
 
         use_leaks = kwargs["leaks"]
         passwords_file = kwargs["passwords_file"]
+        if not passwords_file and not use_leaks and command == "attack":
+            error("A password file should be given or define 'use leaks' (-L, or --leaks) instead")
+            exit(1)
 
         endpoint_type = kwargs["endpoint_type"]
 

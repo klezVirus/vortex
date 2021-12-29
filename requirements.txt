@@ -16,3 +16,4 @@ psutil
 pysocks
 taser>=0.3.3
 unidecode
+tabulate

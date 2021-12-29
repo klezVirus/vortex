@@ -1,6 +1,8 @@
 import os.path
 import re
 import sqlite3
+import pandas as pd
+from tabulate import tabulate
 
 from actions.action import Action
 from db.enums.types import EndpointType
@@ -11,7 +13,7 @@ from utils.utils import error, info, warning, success
 class Db(Action):
     def __init__(self, workspace):
         super().__init__(workspace=workspace)
-        self.commands = ["init", "sql", "add-endpoint", "add-user", "drop-user", "truncate-table", "export"]
+        self.commands = ["init", "sql", "add-endpoint", "add-user", "drop-user", "truncate-table", "found-logins", "export"]
 
     def execute(self, **kwargs):
         self.dbh.connect()
@@ -130,6 +132,16 @@ class Db(Action):
             info(f"Deleting {email} from DB")
             with self.dbh.create_cursor() as cursor:
                 cursor.execute("DELETE FROM users WHERE email LIKE ?", (email, ))
+
+        elif command == "found-logins":
+            success("Valid Logins Collected:")
+            sql = "SELECT * FROM found_logins"
+            table = []
+            with self.dbh.create_cursor() as cursor:
+                cursor.execute(sql)
+                for row in cursor:
+                    table.append(list(row))
+            print(tabulate(table, headers=["ID", "Target", "E-Mail", "Password"]))
 
         elif command == "drop-table":
             tables = []
