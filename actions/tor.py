@@ -15,13 +15,6 @@ class Tor(Action):
         super().__init__(workspace)
         self.win = os.name == "nt"
         self.commands = ["start", "stop", "install", "change-pwd"]
-        self.__rc = r"""
-SOCKSPort 9150
-RunAsDaemon 1
-ControlPort 9151
-HashedControlPassword ####PASSWORD####
-CookieAuthentication 1
-"""
         if self.win:
             self.tor = get_project_root().joinpath("tor", "TorBrowser", "Tor", "tor.exe").absolute()
             self.tor_rc = get_project_root().joinpath("tor", "torrc").absolute()
@@ -39,8 +32,24 @@ CookieAuthentication 1
                 error("Tor not found. Please install it or add it to PATH")
                 exit(1)
 
-        self.config = configparser.ConfigParser(allow_no_value=True, interpolation=configparser.ExtendedInterpolation())
-        self.config.read(str(get_project_root().joinpath("config", "config.ini").absolute()))
+        self.socks_port = self.config.get("TOR", "socks_port")
+        self.ctrl_port = self.config.get("TOR", "ctrl_port")
+        self.__rc = r"""
+SOCKSPort ####SOCKS_PORT####
+RunAsDaemon 1
+ControlPort ####CTRL_PORT####
+HashedControlPassword ####PASSWORD####
+CookieAuthentication 1
+    """
+
+    @property
+    def rc(self):
+        return self.__rc.replace(
+            "####SOCKS_PORT####", self.socks_port
+        ).replace(
+            "####CTRL_PORT####",
+            self.ctrl_port
+        )
 
     def hash_password(self, password):
         cmd = f'"{self.tor}" --hash-password {password}'

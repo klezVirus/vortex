@@ -109,7 +109,11 @@ class Search(Action):
 
         elif command == "pwndb":
             info("Starting search on PwnDB")
-            users = PwnDB(domain=domain).fetch()
+
+            users = PwnDB(
+                domain=domain,
+                socks_port=self.config.get("TOR", "socks_port")
+            ).fetch()
             progress(f"Found {len(users)} leaked accounts!", indent=2)
             info(f"Updating DB ...")
             for u, leaks in users.items():

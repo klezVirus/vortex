@@ -1,5 +1,6 @@
 import argparse
 import json
+import socket
 
 import requests
 from bs4 import BeautifulSoup
@@ -9,7 +10,7 @@ from stem.control import Controller
 
 
 class PwnDB:
-    def __init__(self, domain):
+    def __init__(self, domain, socks_port=None):
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:93.0) Gecko/20100101 Firefox/93.0",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -26,11 +27,23 @@ class PwnDB:
         self.session.verify = False
         self.session.headers = self.headers
         # We need TOR for this
-        self.toggle_proxy("socks5h://127.0.0.1:9150")
+        self.socks_port = socks_port
+        if not self.socks_port or self.socks_port == "":
+            self.auto_select()
+        self.toggle_proxy(f"socks5h://127.0.0.1:{self.socks_port}")
         try:
             self.authenticate()
         except:
             pass
+
+    def auto_select(self):
+        for port in [9050, 9150]:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            location = ("127.0.0.1", port)
+            if s.connect_ex(location) == 0:
+                self.socks_port = port
+        if not self.socks_port:
+            raise ConnectionError("Tor Service Not Listening on known ports")
 
     def toggle_proxy(self, proxy=None):
         if self.session.proxies is not None and proxy is None:
