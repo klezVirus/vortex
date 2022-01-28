@@ -1,17 +1,23 @@
 import os
 
 import requests
+import requests_html
 
 from enumerators.enumerator import VpnEnumerator, ScanType
 from bs4 import BeautifulSoup
 
-from utils.utils import time_label, logfile, get_project_root, info
+from utils.utils import *
 
 
 class CitrixlegacyEnumerator(VpnEnumerator):
     def __init__(self, target, group="dummy"):
         super().__init__()
+        self.html_session = requests_html.HTMLSession()
+        self.html_session.headers = self.session.headers
+        self.html_session.proxies = self.session.proxies
+        self.html_session.verify = self.session.verify
         self.target = target.strip()
+        self.group_field = None
         self.select_group(group)
 
     def logfile(self, st: ScanType) -> str:
@@ -20,27 +26,67 @@ class CitrixlegacyEnumerator(VpnEnumerator):
 
     def validate(self) -> bool:
         url = f"https://{self.target}/vpn/index.html"
-        res = self.session.get(url, timeout=5)
+        res = self.session.get(url)
         soup = BeautifulSoup(res.text, features="html.parser")
-        element = soup.find("form", {"name": "vpnForm"})
+        e1 = soup.find("form", {"name": "vpnForm"})
+
+        e2 = [a["href"] for a in soup.find_all("link") if hasattr(a, "href") and a["href"].find("citrix") > -1]
+        e3 = soup.find("title").text if soup.find("title") else None
         # Legacy version of Citrix Identified
-        return res.status_code == 200 and (
+        if not(res.status_code == 200 and (
                 res.url.startswith(url) or
                 res.url.startswith(url.replace(":443", ""))
-        ) and element is not None
+        )):
+            return False
+
+        return e1 is not None or e2 or e3.lower().find("citrix") > -1 or e3.lower().find("gateway") > -1
 
     def find_groups(self):
-        url = f"https://{self.target}/vpn/index.html"
-        res = self.session.get(url)
+        groups = []
+        path = "/vpn/index.html"
+        url = f"https://{self.target}{path}"
+        res = self.html_session.get(url)
         if res.status_code != 200:
-            print(f"[-] {self.__class__.__name__}: Failed to enumerate groups")
+            error(f"{self.__class__.__name__}: Failed to enumerate groups")
             return
         soup = BeautifulSoup(res.text, features="html.parser")
+        select = soup.find("select")
+        if select and hasattr(select, "name"):
+            self.group_field = select["name"]
         options = soup.find_all("option")
-        if len(options) == 0:
-            print("[-] No available VPN groups")
+        if len(options) > 0:
+            groups = [o["value"] for o in options]
+        else:
+            warning("Couldn't identify the group selection box")
+            info("Do you want to override the target path?")
+            progress(f"Current path: {path}", indent=2)
+            path = input("  $> ")
+
+            info("Loading via JavaScript...")
+            url = f"https://{self.target}{path}"
+            res = self.html_session.get(url)
+            res.html.render()
+            soup = BeautifulSoup(res.html.html, features="html.parser")
+            select = soup.find("select")
+            if select and hasattr(select, "name"):
+                self.group_field = select["name"]
+            options = soup.find_all("option")
+            if len(options) > 0:
+                groups = [o["value"] for o in options]
+        # for key, value in res.cookies.items():
+        #         if (
+        #             key.lower().find("domains") > -1 or
+        #             key.lower().find("groups") > -1
+        #             ) and len(value.split(",")) > 0:
+        #         progress(f"Found potential group list: {value}", indent=2)
+        #         groups = [g.strip() for g in value.split(",")]
+        #    elif key.lower().find("domain") > -1 or key.lower().find("group") > -1:
+        #         progress(f"Found potential group key: {key}", indent=2)
+        #        self.group_field = key
+        if len(groups) == 0:
+            error("No available VPN groups")
             exit(1)
-        return [o["value"] for o in options]
+        return groups
 
     def select_group(self, group=None):
         if group is not None:
@@ -63,20 +109,24 @@ class CitrixlegacyEnumerator(VpnEnumerator):
 
     def login(self, username, password) -> bool:
         url = f"https://{self.target}/cgi/login"
-        cookies = {
-            "NSC_TASS": "/robots.txt"
-        }
+        # cookies = {
+        #     "NSC_TASS": "/robots.txt"
+        # }
         data = {"login": username,
                 "dummy_username": '',
                 "dummy_pass1": '',
                 "passwd": password
                 }
+        if self.group_field and self.group:
+            data[self.group_field] = self.group
+        elif self.group:
+            warning("Couldn't identify ")
 
-        headers = self.__headers
+        headers = self.session.headers
         headers["Origin"] = f"https://{self.target}"
         headers["Referer"] = f"https://{self.target}/vpn/index.html"
 
-        res = self.session.post(url, headers=headers, cookies=cookies, data=data)
+        res = requests.post(url, cookies=self.session.cookies, headers=headers, data=data)
         if res.status_code == 302:
             if "Location" in res.headers.keys():
                 if res.headers["Location"].endswith("/vpn/index.html") and len(res.content) == 604:
