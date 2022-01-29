@@ -120,7 +120,14 @@ class CitrixlegacyEnumerator(VpnEnumerator):
         if self.group_field and self.group:
             data[self.group_field] = self.group
         elif self.group:
-            warning("Couldn't identify ")
+            warning("Multiple groups identified, but couldn't identify group field", indent=2)
+            warning("The group field is the parameter name of the group in the POST request", indent=2)
+            info("Please provide a valid group field:", indent=2)
+            self.group_field = input("  $> ")
+
+        if not self.group_field:
+            error(f"Group field not provided, skipping {username}:{password}", indent=2)
+            return False
 
         headers = self.session.headers
         headers["Origin"] = f"https://{self.target}"
