@@ -153,7 +153,7 @@ class CitrixlegacyEnumerator(VpnEnumerator):
 
         res = self.session.post(url, cookies=self.session.cookies, headers=headers, data=data)
 
-        return self.detect_succes(res), str(res.status_code), len(res.content)
+        return self.detect_success(res), str(res.status_code), len(res.content)
 
     def detect_success(self, res):
         soup = BeautifulSoup(res.text, features="html.parser")
