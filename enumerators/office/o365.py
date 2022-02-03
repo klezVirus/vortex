@@ -39,7 +39,7 @@ class O365Enumerator(VpnEnumerator):
     def get_error(self, error):
         return AadError.from_str(error)
 
-    def login(self, username, password) -> bool:
+    def login(self, username, password) -> tuple:
         data = {
             "client_id": "1b730954-1685-4b74-9bfd-dac224a7b894",
             "grant_type": "password",
@@ -53,13 +53,13 @@ class O365Enumerator(VpnEnumerator):
         auth_data = res.json()
         err = None
         if "access_token" in auth_data.keys():
-            return True
+            return True, str(res.status_code), len(res.content)
         if "error_description" in auth_data.keys():
             err = self.get_error(auth_data["error_description"])
         if err == AadError.MFA_NEEDED:
             error(f"{username} need MFA", indent=2)
-            return True
+            return True, str(res.status_code), len(res.content)
         elif err == AadError.LOCKED:
             error(f"{username} is locked", indent=2)
-            return True
-        return False
+            return True, str(res.status_code), len(res.content)
+        return False, str(res.status_code), len(res.content)

@@ -135,7 +135,7 @@ class CitrixEnumerator(VpnEnumerator):
                 pass
         self.group = groups[choice]
 
-    def login(self, username, password) -> bool:
+    def login(self, username, password) -> tuple:
         url = f"https://{self.target}/p/u/doAuthentication.do"
         self.session.headers["X-Citrix-Am-Labeltypes"] = "none, plain, heading, information, warning, error, " \
                                                          "confirmation, image, nsg-epa, nsg-epa-failure, " \
@@ -173,7 +173,7 @@ class CitrixEnumerator(VpnEnumerator):
                             success = False
                             break
             except:
-                return False
-            return success
+                return False, str(res.status_code), len(res.content)
+            return success, str(res.status_code), len(res.content)
         else:
-            return False
+            return False, str(res.status_code), len(res.content)

@@ -68,7 +68,7 @@ class PulseEnumerator(VpnEnumerator):
                 pass
         self.group = groups[choice]
 
-    def login(self, username, password) -> bool:
+    def login(self, username, password) -> tuple:
         url = f"https://{self.target}/dana-na/auth/{self.dssignin}/login.cgi"
         cookies = {
             "lastRealm": self.group,
@@ -96,7 +96,7 @@ class PulseEnumerator(VpnEnumerator):
                     if header.lower() != "location":
                         continue
                     if value.find("p=failed") > -1:
-                        return False
-            return True
+                        return False, str(res.status_code), len(res.content)
+            return True, str(res.status_code), len(res.content)
         else:
-            return False
+            return False, str(res.status_code), len(res.content)

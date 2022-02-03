@@ -18,6 +18,7 @@ class CitrixlegacyEnumerator(VpnEnumerator):
         self.html_session.verify = self.session.verify
         self.target = target.strip()
         self.group_field = None
+        self.skip_group = False
         self.select_group(group)
 
     def logfile(self, st: ScanType) -> str:
@@ -58,21 +59,34 @@ class CitrixlegacyEnumerator(VpnEnumerator):
             groups = [o["value"] for o in options]
         else:
             warning("Couldn't identify the group selection box")
-            info("Do you want to override the target path?")
-            progress(f"Current path: {path}", indent=2)
-            path = input("  $> ")
+            info("Do you want to skip the group selection and proceed without an groups?")
+            choice = "k"
+            while choice.lower().strip() not in ["y", "n"]:
+                choice = input("  [y|n] $> ")
+            if choice == "y":
+                self.skip_group = True
 
-            info("Loading via JavaScript...")
-            url = f"https://{self.target}{path}"
-            res = self.html_session.get(url)
-            res.html.render()
-            soup = BeautifulSoup(res.html.html, features="html.parser")
-            select = soup.find("select")
-            if select and hasattr(select, "name"):
-                self.group_field = select["name"]
-            options = soup.find_all("option")
-            if len(options) > 0:
-                groups = [o["value"] for o in options]
+            if not self.skip_group:
+                info("Do you want to override the target path?")
+                progress(f"Current path: {path}", indent=2)
+
+
+
+                path = input("  $> ")
+                if not path.strip().startswith("/"):
+                    warning("Invalid path")
+
+                info("Loading via JavaScript...")
+                url = f"https://{self.target}{path}"
+                res = self.html_session.get(url)
+                res.html.render()
+                soup = BeautifulSoup(res.html.html, features="html.parser")
+                select = soup.find("select")
+                if select and hasattr(select, "name"):
+                    self.group_field = select["name"]
+                options = soup.find_all("option")
+                if len(options) > 0:
+                    groups = [o["value"] for o in options]
         # for key, value in res.cookies.items():
         #         if (
         #             key.lower().find("domains") > -1 or
@@ -83,9 +97,9 @@ class CitrixlegacyEnumerator(VpnEnumerator):
         #    elif key.lower().find("domain") > -1 or key.lower().find("group") > -1:
         #         progress(f"Found potential group key: {key}", indent=2)
         #        self.group_field = key
-        if len(groups) == 0:
-            error("No available VPN groups")
-            exit(1)
+                if len(groups) == 0:
+                    error("No available VPN groups")
+                    exit(1)
         return groups
 
     def select_group(self, group=None):
@@ -93,6 +107,9 @@ class CitrixlegacyEnumerator(VpnEnumerator):
             self.group = group
             return
         groups = self.find_groups()
+        if self.skip_group:
+            self.group = None
+            return
         info("Select a VPN group:")
         choice = -1
 
@@ -107,7 +124,7 @@ class CitrixlegacyEnumerator(VpnEnumerator):
                 pass
         self.group = groups[choice]
 
-    def login(self, username, password) -> bool:
+    def login(self, username, password) -> tuple:
         url = f"https://{self.target}/cgi/login"
         # cookies = {
         #     "NSC_TASS": "/robots.txt"
@@ -138,8 +155,8 @@ class CitrixlegacyEnumerator(VpnEnumerator):
         if res.status_code == 302:
             if "Location" in res.headers.keys():
                 if res.headers["Location"].endswith("/vpn/index.html") and len(res.content) == 604:
-                    return False
+                    return False, str(res.status_code), len(res.content)
                 else:
-                    return True
+                    return True, str(res.status_code), len(res.content)
         else:
-            return False
+            return False, str(res.status_code), len(res.content)

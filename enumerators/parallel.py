@@ -19,11 +19,12 @@ class Worker(threading.Thread):
             if not username or not password:
                 return
             try:
-                if self.threading_object.safe_login(username, password):
+                result, r_code, r_len = self.threading_object.safe_login(username, password)
+                if result:
                     self.threading_object.add_valid_login(username, password)
-                    success(f"{username}:{password} is valid!", indent=2)
+                    success(f"{username:50}:{password:50} is valid! -- CODE: {r_code} ; LEN: {r_len:8}", indent=2)
                 else:
-                    error(f"{username}:{password} is not valid.", indent=2)
+                    error(f"{username:50}:{password:50} is not valid. -- CODE: {r_code} ; LEN: {r_len:8}", indent=2)
             except Exception as e:
                 debug(f"Exception: {e}")
             self.threading_object.done()

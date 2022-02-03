@@ -37,9 +37,9 @@ class AdfsEnumerator(VpnEnumerator):
         if user_realm["NameSpaceType"] not in ["Unknown", "Managed"] and "AuthURL" in user_realm.keys():
             self.auth_url = user_realm["AuthURL"]
 
-    def login(self, username, password) -> bool:
+    def login(self, username, password) -> tuple:
         if not self.auth_url:
-            return False
+            return False, 0, 0
         form = None
         res = self.session.get(self.auth_url)
         if res.status_code == 200:
@@ -60,8 +60,8 @@ class AdfsEnumerator(VpnEnumerator):
 
         res = self.session.post(url, data=data)
         if res.status_code == 302:
-            return True
+            return True, str(res.status_code), len(res.content)
         elif res.text.find("Your password has expired") > -1:
             success(f"{username}:{password} is valid but the password has expired", indent=2)
-            return True
-        return False
+            return True, str(res.status_code), len(res.content)
+        return False, str(res.status_code), len(res.content)

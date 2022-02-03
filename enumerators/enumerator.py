@@ -154,13 +154,14 @@ class VpnEnumerator(ABC):
                 break
         return False
 
-    def safe_login(self, username, password) -> bool:
+    def safe_login(self, username, password) -> tuple:
         retries = self.__retry
         while retries > 0:
             try:
                 time.sleep(self.random_throttle)
                 return self.login(username, password)
             except (requests.ReadTimeout, ConnectionError, requests.exceptions.ConnectionError, requests.exceptions.TooManyRedirects):
+                retries -= 1
                 pass
         return False
 
@@ -169,7 +170,7 @@ class VpnEnumerator(ABC):
         pass
 
     @abstractmethod
-    def login(self, user, password) -> bool:
+    def login(self, user, password) -> tuple:
         pass
 
     @abstractmethod

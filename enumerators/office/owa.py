@@ -81,7 +81,7 @@ class OwaEnumerator(VpnEnumerator):
             pass
         return self.netbios_domain is not None
 
-    def login(self, username, password) -> bool:
+    def login(self, username, password) -> tuple:
         if not self.autodiscover_url:
             url = "https://autodiscover-s.outlook.com/autodiscover/autodiscover.xml"
             auth = (username, password)
@@ -93,4 +93,4 @@ class OwaEnumerator(VpnEnumerator):
 
         self.session.headers["Content-Type"] = "text/xml"
         res = self.session.get(url, auth=auth)
-        return res.status_code in valid_auth_codes
+        return res.status_code in valid_auth_codes, str(res.status_code), len(res.content)

@@ -85,7 +85,7 @@ class LyncEnumerator(VpnEnumerator):
             self.lync_auth_url = urlparse.urljoin('/'.join(self.lync_base_url.split('/')[0:3]), "/WebTicket/oauthtoken")
         return self.lync_auth_url is not None
 
-    def login(self, username, password) -> bool:
+    def login(self, username, password) -> tuple:
         if not self.lync_auth_url:
             url = "https://login.microsoftonline.com/rst2.srf"
             data = LyncEnumerator.soap_envelop(username, password)
@@ -99,14 +99,14 @@ class LyncEnumerator(VpnEnumerator):
             except:
                 pass
             if not err:
-                return True
+                return True, str(res.status_code), len(res.content)
             if err == AadError.MFA_NEEDED:
                 error(f"{username} need MFA", indent=2)
-                return True
+                return True, str(res.status_code), len(res.content)
             elif err == AadError.LOCKED:
                 error(f"{username} is locked", indent=2)
-                return True
-            return False
+                return True, str(res.status_code), len(res.content)
+            return False, str(res.status_code), len(res.content)
         else:
             url = self.lync_auth_url
             data = {
@@ -115,7 +115,7 @@ class LyncEnumerator(VpnEnumerator):
                 "password": password
             }
             res = self.session.post(url, data=data)
-            return "access_token" in res.json().keys()
+            return "access_token" in res.json().keys(), str(res.status_code), len(res.content)
 
     @staticmethod
     def soap_envelop(username, password):

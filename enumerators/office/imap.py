@@ -36,15 +36,15 @@ class ImapEnumerator(VpnEnumerator):
         except Exception as e:
             return e == imapclient.exceptions.LoginError
 
-    def login(self, username, password) -> bool:
+    def login(self, username, password) -> tuple:
         host, port = self.target.split(":")
         if not port:
             port = 993
         try:
             server = imapclient.IMAPClient(self.target, port=port, ssl=True, timeout=3)
             server.login(username, password)
-            return True
+            return True, 0 , 0
         except imapclient.exceptions.LoginError:
-            return False
+            return False, 0, 0
         except Exception as e:
             pass

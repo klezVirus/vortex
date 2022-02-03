@@ -80,7 +80,7 @@ class SonicwallEnumerator(VpnEnumerator):
                 pass
         self.group = groups[choice]
 
-    def login(self, username, password) -> bool:
+    def login(self, username, password) -> tuple:
         url = self.__auth_url
 
         res = self.session.get(url)
@@ -104,7 +104,7 @@ class SonicwallEnumerator(VpnEnumerator):
         soup = BeautifulSoup(res.text, features="html.parser")
         element = soup.find("span", {"class": "bodytext error"})
 
-        return element is None
+        return element is None, str(res.status_code), len(res.content)
 
         # Probably too restrictive
         # Needs more testing against SonicWall endpoints

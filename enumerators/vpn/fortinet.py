@@ -50,7 +50,7 @@ class FortinetEnumerator(VpnEnumerator):
         else:
             self.find_groups()
 
-    def login(self, username, password) -> bool:
+    def login(self, username, password) -> tuple:
         url = f"https://{self.target}/remote/logincheck"
 
         self.session.headers["Origin"] = f"https://{self.target}"
@@ -67,4 +67,4 @@ class FortinetEnumerator(VpnEnumerator):
         # Failure return something like this:
         # ret=0,redir=/remote/login?&err=sslvpn_login_permission_denied&lang=en
         # If we don't find it, we might have a success
-        return res.content.find("redir=/remote/login") == -1
+        return res.content.find("redir=/remote/login") == -1, str(res.status_code), len(res.content)

@@ -110,7 +110,7 @@ class CiscoEnumerator(VpnEnumerator):
             except KeyboardInterrupt:
                 exit(1)
 
-    def login(self, username, password) -> bool:
+    def login(self, username, password) -> tuple:
         if not self.passed:
             self.validate_group()
         url = f"https://{self.target}/+webvpn+/index.html"
@@ -131,17 +131,17 @@ class CiscoEnumerator(VpnEnumerator):
         res = self.session.post(url, data=data)
         if 400 > res.status_code > 300:
             # Redirect, potential success
-            return True
+            return True, str(res.status_code), len(res.content)
         elif res.status_code >= 400:
             # Error
-            return False
+            return False, str(res.status_code), len(res.content)
         soup = BeautifulSoup(res.text, features="html.parser")
         script = soup.find('script')
         if not script:
             # We don't have a script nor a redirect? Error
-            return False
+            return False, str(res.status_code), len(res.content)
         else:
             # We do have a script
             # It's redirecting to logon page? Failure
             # It's not redirecting to the logon page? It might be a success!
-            return script.text.find("logon.html") < 0
+            return script.text.find("logon.html") < 0, str(res.status_code), len(res.content)
