@@ -12,13 +12,6 @@ def get_project_root() -> Path:
 
 
 def colors(string, color):
-    """Make things colorfull
-
-    Arguments:
-        string {str} -- String to apply colors on
-        color {int} -- value of color to apply
-
-    """
     return f"{color}{string}{Fore.WHITE}"
 
 
@@ -27,27 +20,27 @@ def colored(message, color: Fore, symbol="*", indent=0):
 
 
 def info(message, indent=0):
-    print(colored(message, indent=indent, symbol="*", color=Fore.BLUE))
+    print(colored(message, indent=indent, symbol="*", color=Fore.BLUE), flush=True)
 
 
 def error(message, indent=0):
-    print(colored(message, indent=indent, symbol="-", color=Fore.RED))
+    print(colored(message, indent=indent, symbol="-", color=Fore.RED), flush=True)
 
 
 def success(message, indent=0):
-    print(colored(message, indent=indent, symbol="+", color=Fore.GREEN))
+    print(colored(message, indent=indent, symbol="+", color=Fore.GREEN), flush=True)
 
 
 def warning(message, indent=0):
-    print(colored(message, indent=indent, symbol="#", color=Fore.YELLOW))
+    print(colored(message, indent=indent, symbol="#", color=Fore.YELLOW), flush=True)
 
 
 def debug(message, indent=0):
-    print(colored(message, indent=indent, symbol="$", color=Fore.MAGENTA))
+    print(colored(message, indent=indent, symbol="$", color=Fore.MAGENTA), flush=True)
 
 
 def progress(message, indent=0):
-    print(colored(message, indent=indent, symbol=">", color=Fore.CYAN))
+    print(colored(message, indent=indent, symbol=">", color=Fore.CYAN), flush=True)
 
 
 def time_label():
