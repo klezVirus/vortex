@@ -143,7 +143,7 @@ class CitrixlegacyEnumerator(VpnEnumerator):
             self.group_field = input("  $> ")
             if not self.group_field:
                 error(f"Group field not provided, skipping {username}:{password}", indent=2)
-                return False
+                return False, 0 , 0
             else:
                 data[self.group_field] = self.group
 
@@ -151,10 +151,18 @@ class CitrixlegacyEnumerator(VpnEnumerator):
         headers["Origin"] = f"https://{self.target}"
         headers["Referer"] = f"https://{self.target}/vpn/index.html"
 
-        res = requests.post(url, cookies=self.session.cookies, headers=headers, data=data)
+        res = self.session.post(url, cookies=self.session.cookies, headers=headers, data=data)
+
+        return self.detect_succes(res), str(res.status_code), len(res.content)
+
+    def detect_success(self, res):
+        soup = BeautifulSoup(res.text, features="html.parser")
+        return soup.find("form", {"name": "vpnForm"}) is not None
+
+    def old_detect_success(self, res):
         if res.status_code == 302:
-            if "Location" in res.headers.keys():
-                if res.headers["Location"].endswith("/vpn/index.html") and len(res.content) == 604:
+            if res.headers.get("Location"):
+                if res.headers.get("Location").endswith("/vpn/index.html"):
                     return False, str(res.status_code), len(res.content)
                 else:
                     return True, str(res.status_code), len(res.content)
