@@ -41,6 +41,11 @@ class Import(Action):
         e_dao = EndpointDao(handler=self.dbh)
         db_endpoints = [e.target for e in e_dao.list_all()]
 
+        if domain is None:
+            error("Domain field is required")
+            info("Please enter a target domain")
+            domain = self.wait_for_input()
+
         if command == "blues":
             masher = NameMasher()
             mail_format = self.dbh.get_email_format()
@@ -50,7 +55,7 @@ class Import(Action):
             else:
                 masher.fmt = mail_format
 
-            with open(import_file) as imports:
+            with open(import_file, encoding="utf-8", errors="replace") as imports:
                 reader = csv.DictReader(imports)
                 for row in reader:
                     name = row['Name']

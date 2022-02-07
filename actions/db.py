@@ -131,7 +131,7 @@ class Db(Action):
                 email = self.wait_for_input()
             info(f"Deleting {email} from DB")
             with self.dbh.create_cursor() as cursor:
-                cursor.execute("DELETE FROM users WHERE email LIKE ?", (email, ))
+                cursor.execute("DELETE FROM users WHERE email LIKE ?", ("%" + email + "%", ))
 
         elif command == "found-logins":
             success("Valid Logins Collected:")
