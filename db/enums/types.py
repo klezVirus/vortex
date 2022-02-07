@@ -6,13 +6,13 @@ class ExtendedEnum(Enum):
     def get_name(cls, value):
         if isinstance(value, str):
             value = int(value)
-        endpoint_types = dict(map(lambda c: (c.value, c.name.lower()), cls))
-        return endpoint_types[value] if value in endpoint_types.keys() else None
+        _types = dict(map(lambda c: (c.value, c.name.lower()), cls))
+        return _types[value] if value in _types.keys() else None
 
     @classmethod
     def from_name(cls, name):
-        endpoint_types = dict(map(lambda c: (c.name.lower(), c.value), cls))
-        return endpoint_types[name] if name in endpoint_types.keys() else None
+        _types = dict(map(lambda c: (c.name.lower(), c.value), cls))
+        return _types[name] if name in _types.keys() else None
 
     @classmethod
     def value_list(cls):
