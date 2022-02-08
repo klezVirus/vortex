@@ -31,16 +31,22 @@ class CitrixlegacyEnumerator(VpnEnumerator):
         soup = BeautifulSoup(res.text, features="html.parser")
         e1 = soup.find("form", {"name": "vpnForm"})
 
-        e2 = [a["href"] for a in soup.find_all("link") if hasattr(a, "href") and a["href"].find("citrix") > -1]
+        e2 = [a["href"] for a in soup.find_all("link") if hasattr(a, "href") and a.get("href") and a["href"].find("citrix") > -1]
         e3 = soup.find("title").text if soup.find("title") else None
         # Legacy version of Citrix Identified
-        if not(res.status_code == 200 and (
+        if not (res.status_code == 200 and (
                 res.url.startswith(url) or
                 res.url.startswith(url.replace(":443", ""))
         )):
             return False
 
-        return e1 is not None or e2 or e3.lower().find("citrix") > -1 or e3.lower().find("gateway") > -1
+        result = e1 is not None or len(e2) > 0 or (
+                e3 is not None and (
+                    e3.lower().find("citrix") > -1 or e3.lower().find("gateway") > -1
+                )
+            )
+
+        return result
 
     def find_groups(self):
         groups = []
@@ -70,8 +76,6 @@ class CitrixlegacyEnumerator(VpnEnumerator):
                 info("Do you want to override the target path?")
                 progress(f"Current path: {path}", indent=2)
 
-
-
                 path = input("  $> ")
                 if not path.strip().startswith("/"):
                     warning("Invalid path")
@@ -87,16 +91,16 @@ class CitrixlegacyEnumerator(VpnEnumerator):
                 options = soup.find_all("option")
                 if len(options) > 0:
                     groups = [o["value"] for o in options]
-        # for key, value in res.cookies.items():
-        #         if (
-        #             key.lower().find("domains") > -1 or
-        #             key.lower().find("groups") > -1
-        #             ) and len(value.split(",")) > 0:
-        #         progress(f"Found potential group list: {value}", indent=2)
-        #         groups = [g.strip() for g in value.split(",")]
-        #    elif key.lower().find("domain") > -1 or key.lower().find("group") > -1:
-        #         progress(f"Found potential group key: {key}", indent=2)
-        #        self.group_field = key
+                # for key, value in res.cookies.items():
+                #         if (
+                #             key.lower().find("domains") > -1 or
+                #             key.lower().find("groups") > -1
+                #             ) and len(value.split(",")) > 0:
+                #         progress(f"Found potential group list: {value}", indent=2)
+                #         groups = [g.strip() for g in value.split(",")]
+                #    elif key.lower().find("domain") > -1 or key.lower().find("group") > -1:
+                #         progress(f"Found potential group key: {key}", indent=2)
+                #        self.group_field = key
                 if len(groups) == 0:
                     error("No available VPN groups")
                     exit(1)
@@ -143,7 +147,7 @@ class CitrixlegacyEnumerator(VpnEnumerator):
             self.group_field = input("  $> ")
             if not self.group_field:
                 error(f"Group field not provided, skipping {username}:{password}", indent=2)
-                return False, 0 , 0
+                return False, 0, 0
             else:
                 data[self.group_field] = self.group
 
