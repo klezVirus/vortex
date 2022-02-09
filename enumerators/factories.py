@@ -10,10 +10,12 @@ class VpnEnumeratorFactory:
         enumerator_class = None
         try:
             enumerator_class_string = f"enumerators.vpn.{name}.{name.capitalize()}Enumerator"
+            # print(enumerator_class_string)
             enumerator_class = locate(enumerator_class_string)
             return enumerator_class(target, group=group)
-        except:
+        except Exception as e:
             # traceback.print_exc()
+            # print(e.__class__.__name__ + ": " + e.__str__())
             return None
 
 

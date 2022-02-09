@@ -36,6 +36,7 @@ class EndpointType(ExtendedEnum):
     IMAP = 9
     O365 = 10
     UNKNOWN = 11
+    F5 = 12
 
 
 class ProfileType(ExtendedEnum):

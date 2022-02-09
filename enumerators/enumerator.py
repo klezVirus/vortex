@@ -1,5 +1,6 @@
 import configparser
 import json
+import logging
 import queue
 import random
 import threading
@@ -18,20 +19,6 @@ from colorama import Fore
 
 from enumerators.parallel import Worker
 from utils.utils import get_project_root, colors
-
-
-class ScanType(Enum):
-    DEFAULTS = 0
-    LEAKS = 1
-
-    @staticmethod
-    def from_name(name):
-        if name.lower() in ["defaults", "default", "def", "d"]:
-            return ScanType.DEFAULTS
-        elif name.lower() in ["leaks", "leak", "l"]:
-            return ScanType.LEAKS
-        else:
-            raise NotImplementedError(f"No scan types recorded for name {name}")
 
 
 class VpnEnumerator(ABC):
@@ -72,6 +59,10 @@ class VpnEnumerator(ABC):
         self.session.max_redirects = 2
         self.default_passwords = []
         self.debug = int(self.config.get("DEBUG", "enabled")) > 0
+        self.logger = logging.Logger(name="vortex")
+        handler = logging.FileHandler(self.logfile(), mode="a")
+        self.logger.addHandler(handler)
+        self.logger.setLevel(level=logging.INFO if not self.debug else logging.DEBUG)
         self.found = []
         self.group = None
         self.event_group_selected = Event()
@@ -113,7 +104,6 @@ class VpnEnumerator(ABC):
             thread.daemon = True
             thread.start()
         for user in users:
-
             if use_leaks:
                 for leak in user.leaks:
                     if f"{user.email}:{leak}" in attempts:
@@ -163,7 +153,7 @@ class VpnEnumerator(ABC):
             except (requests.ReadTimeout, ConnectionError, requests.exceptions.ConnectionError, requests.exceptions.TooManyRedirects):
                 retries -= 1
                 pass
-        return False
+        return None, 0, 0
 
     @abstractmethod
     def validate(self) -> bool:
@@ -174,7 +164,7 @@ class VpnEnumerator(ABC):
         pass
 
     @abstractmethod
-    def logfile(self, st: ScanType) -> str:
+    def logfile(self) -> str:
         pass
 
     @staticmethod
@@ -201,22 +191,6 @@ class VpnEnumerator(ABC):
                 "https": proxy
             }
 
-    def default_logins(self, users):
-        for user in users:
-            if not isinstance(user, dict) or "mail" not in user.keys():
-                print(f"[-] Invalid user dictionary found: {user}")
-                continue
-            for default in self.default_passwords:
-                self.attempt_login(user['mail'], default)
-
-    def leaked_logins(self, users):
-        for user in users:
-            if not isinstance(user, dict) or "mail" not in user.keys() or "credentials" not in user.keys():
-                print(f"[-] Invalid user dictionary found: {user}")
-                continue
-            for password in user["credentials"]:
-                self.attempt_login(user['mail'], password)
-
     def attempt_login(self, username, password):
         result = False
         msg = f"Login with {username}:"
@@ -236,17 +210,5 @@ class VpnEnumerator(ABC):
         except:
             return False
 
-    def brute(self, file, scan_type: ScanType):
-        with open(file) as json_in:
-            users = json.load(json_in)
-        if scan_type == ScanType.DEFAULTS:
-            self.default_logins(users)
-        elif scan_type == ScanType.LEAKS:
-            self.leaked_logins(users)
-        else:
-            raise NotImplementedError("Only Leaks and Default Passwords are supported by now")
-        with open(self.logfile(scan_type), "a") as log:
-            for attempt in self.found:
-                log.write(attempt + "\n")
 
 

@@ -3,7 +3,7 @@ import re
 
 import requests
 
-from enumerators.enumerator import VpnEnumerator, ScanType
+from enumerators.enumerator import VpnEnumerator
 from bs4 import BeautifulSoup
 
 from utils.utils import time_label, logfile, get_project_root, error, info
@@ -18,9 +18,9 @@ class SonicwallEnumerator(VpnEnumerator):
         self.set_auth_url()
         self.select_group(group)
 
-    def logfile(self, st: ScanType) -> str:
+    def logfile(self) -> str:
         fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=__file__, scan_type=st.name)))
+        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
     def validate(self) -> bool:
         res = self.set_auth_url()
@@ -104,7 +104,7 @@ class SonicwallEnumerator(VpnEnumerator):
         soup = BeautifulSoup(res.text, features="html.parser")
         element = soup.find("span", {"class": "bodytext error"})
 
-        return element is None, str(res.status_code), len(res.content)
+        return element is None, res
 
         # Probably too restrictive
         # Needs more testing against SonicWall endpoints

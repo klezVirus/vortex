@@ -1,9 +1,11 @@
+import json
+import logging
 import os
 
 import requests
 import requests_html
 
-from enumerators.enumerator import VpnEnumerator, ScanType
+from enumerators.enumerator import VpnEnumerator
 from bs4 import BeautifulSoup
 
 from utils.utils import *
@@ -21,9 +23,9 @@ class CitrixlegacyEnumerator(VpnEnumerator):
         self.skip_group = False
         self.select_group(group)
 
-    def logfile(self, st: ScanType) -> str:
+    def logfile(self) -> str:
         fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=__file__, scan_type=st.name)))
+        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
     def validate(self) -> bool:
         url = f"https://{self.target}/vpn/index.html"
@@ -127,6 +129,11 @@ class CitrixlegacyEnumerator(VpnEnumerator):
             except ValueError:
                 pass
         self.group = groups[choice]
+        if not self.group_field:
+            warning("Multiple groups identified, but couldn't identify group field", indent=2)
+            warning("The group field is the parameter name of the group in the POST request", indent=2)
+            info("Please provide a valid group field:", indent=2)
+            self.group_field = input("  $> ")
 
     def login(self, username, password) -> tuple:
         url = f"https://{self.target}/cgi/login"
@@ -140,16 +147,11 @@ class CitrixlegacyEnumerator(VpnEnumerator):
                 }
         if self.group_field and self.group:
             data[self.group_field] = self.group
-        elif self.group:
-            warning("Multiple groups identified, but couldn't identify group field", indent=2)
-            warning("The group field is the parameter name of the group in the POST request", indent=2)
-            info("Please provide a valid group field:", indent=2)
-            self.group_field = input("  $> ")
-            if not self.group_field:
-                error(f"Group field not provided, skipping {username}:{password}", indent=2)
-                return False, 0, 0
-            else:
-                data[self.group_field] = self.group
+        if not self.group_field:
+            error(f"Group field not provided, skipping {username}:{password}", indent=2)
+            return False, 0, 0
+        else:
+            data[self.group_field] = self.group
 
         headers = self.session.headers
         headers["Origin"] = f"https://{self.target}"
@@ -157,7 +159,7 @@ class CitrixlegacyEnumerator(VpnEnumerator):
 
         res = self.session.post(url, cookies=self.session.cookies, headers=headers, data=data)
 
-        return self.detect_success(res), str(res.status_code), len(res.content)
+        return self.detect_success(res), res
 
     def detect_success(self, res):
         soup = BeautifulSoup(res.text, features="html.parser")
@@ -167,8 +169,8 @@ class CitrixlegacyEnumerator(VpnEnumerator):
         if res.status_code == 302:
             if res.headers.get("Location"):
                 if res.headers.get("Location").endswith("/vpn/index.html"):
-                    return False, str(res.status_code), len(res.content)
+                    return False, res
                 else:
-                    return True, str(res.status_code), len(res.content)
+                    return True, res
         else:
-            return False, str(res.status_code), len(res.content)
+            return False, res

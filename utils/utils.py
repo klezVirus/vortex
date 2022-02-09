@@ -47,13 +47,11 @@ def time_label():
     return time.strftime('%Y%m%d%H%M%S')
 
 
-def logfile(fmt: str, script: str, scan_type: str):
+def logfile(fmt: str, script: str):
     return fmt.replace(
-        "#scan#", scan_type
-    ).replace(
         "#date#", time_label()
     ).replace(
-        "#script#", script
+        "#enumerator#", script
     )
 
 

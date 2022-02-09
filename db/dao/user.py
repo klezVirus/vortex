@@ -84,7 +84,6 @@ class UserDao:
             args = (user.name, user.username, user.email, user.role)
             with self.dbh.create_cursor() as cursor:
                 cursor.execute(sql, args)
-
             # Now, we can fetch the User
             db_user = self.find_by_username(user.email)
         else:

@@ -4,7 +4,7 @@ import requests
 from imapclient import imapclient
 from requests_ntlm import HttpNtlmAuth
 
-from enumerators.enumerator import VpnEnumerator, ScanType
+from enumerators.enumerator import VpnEnumerator
 from bs4 import BeautifulSoup
 
 from utils.ntlmdecoder import ntlmdecode
@@ -21,9 +21,9 @@ class ImapEnumerator(VpnEnumerator):
         super().__init__()
         self.target = target
 
-    def logfile(self, st: ScanType) -> str:
+    def logfile(self) -> str:
         fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=__file__, scan_type=st.name)))
+        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
     def validate(self) -> bool:
         if self.target.find(":") > -1:

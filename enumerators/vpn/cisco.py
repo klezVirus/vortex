@@ -4,7 +4,7 @@ from threading import Thread
 
 import requests
 
-from enumerators.enumerator import VpnEnumerator, ScanType
+from enumerators.enumerator import VpnEnumerator
 from bs4 import BeautifulSoup
 
 from utils.utils import time_label, logfile, get_project_root, warning, debug, error
@@ -18,9 +18,9 @@ class CiscoEnumerator(VpnEnumerator):
         self.select_group(group=group)
         self.passed = False
 
-    def logfile(self, st: ScanType) -> str:
+    def logfile(self) -> str:
         fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=__file__, scan_type=st.name)))
+        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
     def validate(self) -> bool:
         url = f"https://{self.target}/+CSCOE+/logon.html"
@@ -131,17 +131,17 @@ class CiscoEnumerator(VpnEnumerator):
         res = self.session.post(url, data=data)
         if 400 > res.status_code > 300:
             # Redirect, potential success
-            return True, str(res.status_code), len(res.content)
+            return True, res
         elif res.status_code >= 400:
             # Error
-            return False, str(res.status_code), len(res.content)
+            return False, res
         soup = BeautifulSoup(res.text, features="html.parser")
         script = soup.find('script')
         if not script:
             # We don't have a script nor a redirect? Error
-            return False, str(res.status_code), len(res.content)
+            return False, res
         else:
             # We do have a script
             # It's redirecting to logon page? Failure
             # It's not redirecting to the logon page? It might be a success!
-            return script.text.find("logon.html") < 0, str(res.status_code), len(res.content)
+            return script.text.find("logon.html") < 0, res

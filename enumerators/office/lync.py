@@ -7,7 +7,7 @@ from colorama import Fore
 from requests_ntlm import HttpNtlmAuth
 
 from db.enums.errors import AadError
-from enumerators.enumerator import VpnEnumerator, ScanType
+from enumerators.enumerator import VpnEnumerator
 from bs4 import BeautifulSoup
 import urllib.parse as urlparse
 
@@ -37,9 +37,9 @@ class LyncEnumerator(VpnEnumerator):
         if not self.find_s4b_domain() and self.debug:
             debug(f"{self.__class__.__name__}: Couldn't detect S4B Domain", indent=2)
 
-    def logfile(self, st: ScanType) -> str:
+    def logfile(self) -> str:
         fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=__file__, scan_type=st.name)))
+        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
     def validate(self) -> bool:
         return self.lync_autodiscover_url is not None
