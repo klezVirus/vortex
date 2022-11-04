@@ -42,6 +42,7 @@ class PwnDB:
             location = ("127.0.0.1", port)
             if s.connect_ex(location) == 0:
                 self.socks_port = port
+            s.close()
         if not self.socks_port:
             raise ConnectionError("Tor Service Not Listening on known ports")
 

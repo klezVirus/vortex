@@ -44,7 +44,7 @@ if __name__ == '__main__':
         if args.linearize:
             new_df = df.merge(df.credentials.apply(pd.Series), left_on="uid", right_index=True)
             new_df = new_df.drop(columns=["credentials"])
-            new_df.index.names = ["uid"]
+            new_df.index.__names = ["uid"]
 
         new_df.to_csv(args.csv, index=None)
 
