@@ -2,6 +2,8 @@
 import sys
 import os.path
 
+from utils.utils import info
+
 
 class NameMasher:
     def __init__(self, fmt=None):
@@ -10,23 +12,36 @@ class NameMasher:
     def select_format(self):
         first = "first"
         last = "last"
+        second = "second"
         choice = -1
         combinations = [
-            "{0}{1}",
-            "{1}{0}",
-            "{0}.{1}",
-            "{1}.{0}",
-            "{1}.{0:.1}",
-            "{0:.1}{1}",
-            "{1:.1}{0}",
-            "{0:.1}.{1}",
-            "{1:.1}.{0}",
+            "{0}[{1}]{2}",
+            "{0}{2}",
+            "{2}{0}[{1}]",
+            "{2}{0}",
+            "{0}[.{1}].{2}",
+            "{0}.{2}",
+            "{2}.{0}[.{1}]",
+            "{2}.{0}",
+            "{2}.{0:.1}",
+            "{2}.{0:.1}[.{1:.1}]",
+            "{0:.1}{2}",
+            "{0:.1}[{1:.1}]{2}",
+            "{2:.1}{0}",
+            "{2:.1}{0}[{1}]",
+            "{0:.1}.{2}",
+            "{0:.1}.[{1:.1}].{2}",
+            "{2:.1}.{0}",
+            "{2:.1}.{0}.[{1}]",
+            "{2:.1}.{0}[{1}]",
             "{0}",
             "{1}"
+            "{1}[{2}]"
         ]
-        print("[+] Select a format for usernames")
+        info("Select a format for usernames")
+        info("  - 0: first name; 1: second name [optional]; 2: last name")
         for i, c in enumerate(combinations, start=0):
-            print(f"  {i}: " + c.format(first, last))
+            print(f"  {i}: " + c.format(first, second, last))
 
         while not 0 <= choice <= len(combinations) - 1:
             try:
@@ -37,12 +52,16 @@ class NameMasher:
                 continue
         self.fmt = combinations[choice]
 
-    def mash(self, first_name, last_name):
+    def mash(self, first_name, last_name, second_name=None):
         first_name = ''.join([c for c in first_name if c == " " or c.isalpha()])
         last_name = ''.join([c for c in last_name if c == " " or c.isalpha()])
+        if second_name:
+            second_name = ''.join([c for c in second_name if c == " " or c.isalpha()])
+        else:
+            second_name = ""
         if not self.fmt:
             self.select_format()
-        return self.fmt.format(first_name, last_name)
+        return self.fmt.format(first_name, second_name, last_name)
 
     def mash_list(self, name_list: list) -> list:
         ret = []
