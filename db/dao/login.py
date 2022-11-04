@@ -26,7 +26,8 @@ class LoginDao:
         logins = []
         sql = "SELECT * FROM found_logins WHERE email = ? AND password = ? AND url = ?"
         with self.dbh.create_cursor() as cursor:
-            cursor.execute(sql, email, password, url)
+            args = (email, password, url)
+            cursor.execute(sql, args)
             for i in range(cursor.rowcount):
                 data = cursor.fetchone()
                 login = Login(

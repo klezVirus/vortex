@@ -17,8 +17,12 @@ class LeakDao:
                 data = cursor.fetchone()
                 leak = Leak(
                     leak_id=data[0],
-                    password=data[1],
-                    uid=data[2]
+                    uid=data[1],
+                    password=data[2],
+                    hashed=data[3],
+                    address=data[4],
+                    phone=data[5],
+                    database=data[6]
                 )
                 leaks.append(leak)
         return leaks
@@ -33,8 +37,12 @@ class LeakDao:
                 data = cursor.fetchone()
                 leak = Leak(
                     leak_id=data[0],
-                    password=data[1],
-                    uid=data[2]
+                    uid=data[1],
+                    password=data[2],
+                    hashed=data[3],
+                    address=data[4],
+                    phone=data[5],
+                    database=data[6]
                 )
                 leaks.append(leak)
         return leaks
@@ -50,9 +58,8 @@ class LeakDao:
         leaks = self.find_by_user(leak.uid)
         for p in leaks:
             if p.password == leak.password:
-                continue
-
-        sql = "INSERT OR IGNORE INTO leaks (password, uid) VALUES (?, ?)"
-        args = (leak.password, leak.uid)
+                return
+        sql = "INSERT OR IGNORE INTO leaks (uid, password, hash, address, phone, database) VALUES (?, ?, ?, ?, ?, ?)"
+        args = (leak.uid, leak.password, leak.hashed, leak.address, leak.phone, leak.database)
         with self.dbh.create_cursor() as cursor:
             cursor.execute(sql, args)

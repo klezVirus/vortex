@@ -62,7 +62,18 @@ class DBCursor:
 class DBHandler:
     def __init__(self, workspace):
         self.db = get_project_root().joinpath("data").joinpath("workspaces").joinpath(f"{workspace}.db")
+        self.workspace = workspace
         self.connection: Connection = None
+        self.__callback = None
+
+    def enable_debug(self, callback=None):
+        if not callback:
+            self.__callback = print
+            return
+        self.__callback = callback
+
+    def disable_debug(self):
+        self.__callback = None
 
     def db_exists(self):
         return self.db.exists()
@@ -79,21 +90,27 @@ class DBHandler:
         self.tear_down()
         return success
 
-
     def connect(self):
         self.connection = sql.connect(self.db)
+        self.connection.set_trace_callback(self.__callback)
 
     def tear_down(self):
         self.close()
 
     def close(self):
-        self.connection.close()
+        if self.connection:
+            self.connection.close()
         self.connection = None
 
     def create_cursor(self) -> DBCursor:
         if self.connection:
             self.close()
-        return DBCursor(self.db)
+        cursor = DBCursor(self.db)
+        if cursor and cursor.connection:
+            cursor.connection.set_trace_callback(self.__callback)
+        elif cursor and cursor.cursor and cursor.cursor.connection:
+            cursor.cursor.connection.set_trace_callback(self.__callback)
+        return cursor
 
     def execute(self, sql, args=None):
         if not self.connection:

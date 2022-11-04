@@ -1,4 +1,5 @@
 from db.handler import DBHandler
+from db.models.etype import Etype
 from db.models.profile import Profile
 from db.models.endpoint import Endpoint
 
@@ -16,8 +17,9 @@ class EndpointDao:
                 endpoint = Endpoint(
                     eid=data[0],
                     target=data[1],
-                    endpoint_type=data[2],
-                    is_o365=data[3]
+                    email_format=data[2],
+                    etype_ref=data[3],
+                    additional_info=data[4]
                 )
                 endpoints.append(endpoint)
         return endpoints
@@ -28,13 +30,108 @@ class EndpointDao:
         with self.dbh.create_cursor() as cursor:
             cursor.execute(sql, args)
 
+    def find_by_name_like(self, name):
+        name = f"%{name}%"
+        sql = "SELECT * FROM endpoints where target LIKE ?"
+        args = (name,)
+        ds = []
+        with self.dbh.create_cursor() as cursor:
+            cursor.execute(sql, args)
+            for data in cursor:
+                d = Endpoint(
+                    eid=data[0],
+                    target=data[1],
+                    email_format=data[2],
+                    etype_ref=data[3],
+                    additional_info=data[4]
+                )
+                ds.append(d)
+        return ds
+
+    def find_by_name_and_type(self, name, etype):
+        sql = "SELECT * FROM endpoints where target = ? and etype_ref = ?"
+        args = (name, etype,)
+        result = []
+        with self.dbh.create_cursor() as cursor:
+            cursor.execute(sql, args)
+            for data in cursor:
+                r = Endpoint(
+                    eid=data[0],
+                    target=data[1],
+                    email_format=data[2],
+                    etype_ref=data[3],
+                    additional_info=data[4]
+                )
+                result.append(r)
+        return len(result) > 0
+
+    def find_where_text(self, text):
+        text = f"%{text}%"
+        sql = "SELECT * FROM endpoints where additional_info LIKE ?"
+        args = (text,)
+        result = []
+        with self.dbh.create_cursor() as cursor:
+            cursor.execute(sql, args)
+            for data in cursor:
+                r = Endpoint(
+                    eid=data[0],
+                    target=data[1],
+                    email_format=data[2],
+                    etype_ref=data[3],
+                    additional_info=data[4]
+                )
+                result.append(r)
+        return result[0] if len(result) > 0 else None
+
+    def exists_categorised(self, name):
+        e = self.find_by_name(name)
+        return e is not None and e.etype_ref != 1
+
+    def exists(self, name):
+        return self.find_by_name(name) is not None
+
+    def find_by_name(self, name):
+        sql = "SELECT * FROM endpoints where target = ?"
+        args = (name,)
+        result = []
+        with self.dbh.create_cursor() as cursor:
+            cursor.execute(sql, args)
+            for data in cursor:
+                r = Endpoint(
+                    eid=data[0],
+                    target=data[1],
+                    email_format=data[2],
+                    etype_ref=data[3],
+                    additional_info=data[4]
+                )
+                result.append(r)
+        return result[0] if len(result) > 0 else None
+
+    def update(self, endpoint: Endpoint):
+        if not self.exists(endpoint.target):
+            self.save(endpoint)
+            return
+        db_entry = self.find_by_name(endpoint.target)
+        if db_entry.etype_ref != 1 and endpoint.etype_ref == 1:
+            return
+        sql = r"""UPDATE endpoints 
+        SET target = ?, 
+            email_format = ?, 
+            etype_ref = ?, 
+            additional_info = ?
+        WHERE eid = ?
+"""
+        args = (endpoint.target, endpoint.email_format, endpoint.etype_ref, endpoint.additional_info_str, db_entry.eid)
+        with self.dbh.create_cursor() as cursor:
+                cursor.execute(sql, args)
+
     def save(self, endpoint: Endpoint):
         # See if there is already
-        endpoints = self.list_all()
-        for p in endpoints:
-            if p.target == endpoint.target and p.endpoint_type == endpoint.endpoint_type:
-                return
-        sql = "INSERT OR IGNORE INTO endpoints (target, endpoint_type, is_o365) VALUES (?, ?, ?)"
-        args = (endpoint.target, endpoint.endpoint_type, endpoint.is_o365)
+        if self.exists(endpoint.target):
+            self.update(endpoint)
+            return
+        sql = "INSERT OR IGNORE INTO endpoints (target, email_format, etype_ref, additional_info) VALUES (?, ?, ?, ?)"
+        args = (endpoint.target, endpoint.email_format, endpoint.etype_ref, endpoint.additional_info_str)
+        print(args)
         with self.dbh.create_cursor() as cursor:
             cursor.execute(sql, args)

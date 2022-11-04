@@ -1,15 +1,23 @@
 import json
 
+import tldextract.tldextract
+
 from db.models.model import Model
 
 
-class Endpoint(Model):
-    def __init__(self, eid, target, email_format, etype_ref:int, additional_info=None):
+class Domain(Model):
+    def __init__(self, did, name, email_format, additional_info=None, level=None):
         super().__init__()
-        self.eid = eid
-        self.target = target
+        self.did = did
+        self.name = name
+        self.level = 2
+        if level:
+            self.level = level
+        else:
+            ext = tldextract.tldextract.extract(name)
+            if ext.subdomain != "":
+                self.level = 3
         self.email_format = email_format
-        self.etype_ref = etype_ref
         self.__additional_info = None
         if isinstance(additional_info, str):
             self.additional_info_str = additional_info
@@ -34,21 +42,11 @@ class Endpoint(Model):
     def additional_info_str(self, value: str):
         self.__additional_info = json.loads(value) if value else {}
 
-    @property
-    def domain(self):
-        tokens = self.target.split(".")
-        if tokens[-2] == "co":
-            domain = ".".join(tokens[-3:])
-        else:
-            domain = ".".join(tokens[-2:])
-        return domain
-
     def to_string(self):
         return f"{self.__class__.__name__}: \n" \
-               f"\t Target -> {self.target}\n" \
-               f"\t Endpoint Type Id -> {self.etype_ref}\n" \
+               f"\t Name -> {self.name}\n" \
+               f"\t Level -> {self.level}\n" \
                f"\t Email FMT -> {self.email_format}\n" \
                f"\t INFO -> {self.additional_info_str}\n"
-
 
 

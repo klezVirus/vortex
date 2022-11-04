@@ -32,7 +32,8 @@ class UserDao:
                 with self.dbh.create_cursor() as aux:
                     aux.execute(sql, args)
                     for leak_data in aux:
-                        leaks.append(leak_data[0])
+                        if leak_data[0]:
+                            leaks.append(leak_data[0])
                     user.leaks = leaks
                 profiles = []
                 sql = "SELECT * FROM profiles where uid = ?"
@@ -73,6 +74,11 @@ class UserDao:
         with self.dbh.create_cursor() as cursor:
             cursor.execute(sql, args)
 
+    def set_valid(self, user: User):
+        # Finally, update the DB user
+        user.valid = True
+        self.save(user)
+
     def save(self, user: User):
         leak_dao = LeakDao(handler=self.dbh)
         profile_dao = ProfileDao(handler=self.dbh)
@@ -108,13 +114,14 @@ class UserDao:
         SET name = ?,
             username = ?,
             email = ?,
-            job = ?
+            job = ?,
+            valid = ?
         WHERE
             uid = ?
         """
-        args = (user.name, user.username, user.email, user.role, user.uid)
+        args = (db_user.name, db_user.username, db_user.email, db_user.role, db_user.uid, db_user.valid)
         with self.dbh.create_cursor() as cursor:
             cursor.execute(sql, args)
-
+        return db_user.uid
 
 

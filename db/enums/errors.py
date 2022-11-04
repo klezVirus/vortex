@@ -2,6 +2,7 @@ from enum import Enum
 
 
 class AadError(Enum):
+    UNKNOWN = -1
     LOCKED = 0
     WRONG_PASSWORD = 1
     EXPIRED_PASSWORD = 2
@@ -12,7 +13,7 @@ class AadError(Enum):
     USER_NOT_FOUND = 7
     TENANT_NOT_FOUND = 8
     ACCOUNT_DISABLED = 9
-    UNKNOWN = 10
+    CONDITIONAL_ACCESS_POLICY = 10
 
     @staticmethod
     def from_str(label):
@@ -36,5 +37,7 @@ class AadError(Enum):
             return AadError.USER_NOT_FOUND
         elif label == "AADSTS90002":
             return AadError.TENANT_NOT_FOUND
+        elif label == "AADSTS53003":
+            return AadError.CONDITIONAL_ACCESS_POLICY
         else:
             return AadError.UNKNOWN

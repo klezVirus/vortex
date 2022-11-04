@@ -24,19 +24,20 @@ class ExtendedEnum(Enum):
 
 
 class EndpointType(ExtendedEnum):
-    CISCO = 0
-    CITRIX = 1
-    CITRIXLEGACY = 2
-    PULSE = 3
-    SONICWALL = 4
-    FORTINET = 5
-    OWA = 6
-    LYNC = 7
-    ADFS = 8
-    IMAP = 9
-    O365 = 10
-    UNKNOWN = 11
-    F5 = 12
+    UNKNOWN = 1
+    CISCO = 2
+    CITRIX = 3
+    CITRIXLEGACY = 4
+    PULSE = 5
+    SONICWALL = 6
+    F5 = 7
+    FORTINET = 8
+    OPENVPN = 9
+    OWA = 10
+    LYNC = 11
+    ADFS = 12
+    IMAP = 13
+    O365 = 14
 
 
 class ProfileType(ExtendedEnum):
