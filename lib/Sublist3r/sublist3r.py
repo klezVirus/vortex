@@ -15,6 +15,7 @@ import socket
 import sys
 import threading
 import time
+import traceback
 from collections import Counter
 
 # external modules
@@ -831,7 +832,6 @@ class CrtSearch(enumratorBaseThreaded):
                         self.subdomains.append(subdomain.strip())
         except Exception as e:
             print(e)
-            pass
 
 
 class PassiveDNS(enumratorBaseThreaded):
@@ -873,12 +873,39 @@ class PassiveDNS(enumratorBaseThreaded):
             pass
 
 
-class portscan():
-    def __init__(self, subdomains, ports):
+class PortScanner:
+    def __init__(self, subdomains=None, ports=None, origins:list=None):
         self.subdomains = subdomains
         self.ports = ports
         self.lock = None
-        self.origins = []
+        if not all([subdomains, ports]) and not origins:
+            return
+        if origins:
+            self.origins = origins
+            self.action = self.port_scan_list
+        else:
+            self.origins = []
+            self.action = self.port_scan
+
+    def port_scan_list(self, origin):
+        try:
+            self.lock.acquire()
+            if origin.find(":") == -1:
+                return
+            host, port = origin.split(":")
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(2)
+                    result = s.connect_ex((host, int(port)))
+                    if result != 0:
+                        self.origins.remove(origin)
+            except socket.gaierror as e:
+                self.origins.remove(origin)
+            except Exception as e:
+                pass
+            self.lock.release()
+        except:
+            pass
 
     def port_scan(self, host, ports):
         self.lock.acquire()
@@ -899,14 +926,22 @@ class portscan():
         self.lock = threading.BoundedSemaphore(value=20)
         threads = []
         # Create
-        for subdomain in self.subdomains:
-            threads.append(threading.Thread(target=self.port_scan, args=(subdomain, self.ports)))
+        if self.action == self.port_scan:
+            for subdomain in self.subdomains:
+                threads.append(threading.Thread(target=self.action, args=(subdomain, self.ports)))
+        else:
+            for origin in self.origins:
+                threads.append(threading.Thread(target=self.action, args=(origin,)))
         # Start all
         for t in threads:
+            t.daemon = True
             t.start()
         # Wait all
         for t in threads:
-            t.join()
+            try:
+                t.join()
+            except KeyboardInterrupt:
+                pass
 
 
 def main(domain, threads, savefile, ports, silent, verbose, enable_bruteforce, engines, subs=None, resolvers=None):
@@ -1008,7 +1043,7 @@ def main(domain, threads, savefile, ports, silent, verbose, enable_bruteforce, e
             if not silent:
                 print(G + "[-] Start port scan now for the following ports: %s%s" % (Y, ports) + W)
             ports = ports.split(',')
-            pscan = portscan(subdomains, ports)
+            pscan = PortScanner(subdomains, ports)
             pscan.run()
 
         elif not silent:

@@ -45,7 +45,7 @@ class Worker(threading.Thread):
                     for badchar in (">", ":", "=", "<", "/", "\\", ";", "&", "%3A", "%3D", "%3C"):
                         response_text = response_text.replace(badchar, " ")
 
-                    emails = re.findall(r"[a-zA-Z0-9.-_]*@(?:[a-z0-9.-]*\.)?" + self.threading_object.domain, response_text, re.I)
+                    emails = re.findall(r"[a-zA-Z0-9.-_]*@(?:[a-z0-9.-]*\.)?" + self.threading_object.__domain, response_text, re.I)
                     if emails:
                         for e in emails:
                             self.threading_object.all_emails.append(e)

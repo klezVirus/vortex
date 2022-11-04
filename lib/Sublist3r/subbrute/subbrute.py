@@ -659,6 +659,6 @@ if __name__ == "__main__":
             # options.resolvers => the resolvers file
             # options.output
             # options.json
-            print(target, record_type, options.subs, options.resolvers, options.process_count, output, json_output)
-            print_target(target, record_type, options.subs, options.resolvers, options.process_count, output,
+            print(target, record_type, options.subs, options.__resolvers, options.process_count, output, json_output)
+            print_target(target, record_type, options.subs, options.__resolvers, options.process_count, output,
                          json_output)

@@ -37,7 +37,7 @@ def main(args):
     logger.info('Starting O365 User Validation...')
 
     for user in args.users:
-        o365_validateUser(gen_user(user,args.domain), args.timeout, args.headers, args.proxy, args.verbose)
+        o365_validateUser(gen_user(user, args.__domain), args.timeout, args.headers, args.proxy, args.verbose)
 
         while threading.activeCount() >= args.max_threads:
             sleep(0.05)
