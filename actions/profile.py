@@ -12,7 +12,7 @@ from scripts.blues import LinkedIn
 from scripts.profiler import Profiler
 from scripts.pwndb import PwnDB
 from utils.namemash import NameMasher
-from utils.utils import colors, progress, info, warning
+from utils.utils import colors, progress, info, warning, success, fatal, error
 
 
 class Profile(Action):
@@ -35,13 +35,12 @@ class Profile(Action):
 
         if command == "single":
             if len(keywords) < 1:
-                print("[-] Single research needs keywords to operate!")
-                exit(1)
+                fatal("Single research needs keywords to operate!")
 
             info("Starting single profile search")
             profiler = Profiler(args=keywords)
             profiler.execute()
-            print(f"[+] Done!")
+            success(f"Done!")
         elif command == "multi":
             if len(keywords) < 1:
                 keywords = None
@@ -62,6 +61,6 @@ class Profile(Action):
                 )
                 profiler = Profiler(args=args)
                 profiler.execute()
-            print(f"[+] Done!")
+            success(f"Done!")
         else:
-            print("[-] Unknown command")
+            error("Unknown command")

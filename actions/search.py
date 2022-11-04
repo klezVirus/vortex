@@ -21,15 +21,21 @@ class Search(Action):
         if not command or command not in self.commands:
             command = self.choose_command()
 
-        domain = kwargs["domain"]
+        domains = kwargs["domain"]
         location = kwargs["location"]
         company = kwargs["company"]
         config = kwargs["config"]
 
-        if domain is None:
+        if domains is None:
             error("Domain field is required")
             info("Please enter a target domain")
-            domain = self.wait_for_input()
+            domains = self.wait_for_input()
+
+        # Listify the domain
+        if domains.find(",") > -1:
+            domains = domains.split(",")
+        else:
+            domains = [domains]
 
         if command in ["linkedin", "crosslinked"] and company is None:
             error("Company name field is required")
@@ -60,10 +66,12 @@ class Search(Action):
             for u in users.employee_list:
                 if u.name.lower() == "linkedin member":
                     continue
+
                 username = masher.mash(u.name.split(" ")[0], u.name.split(" ")[-1])
-                email = f"{username}@{domain}"
-                user = User(uid=0, name=u.name, username=username, email=email, role=u.role)
-                dao.save(user)
+                for domain in domains:
+                    email = f"{username}@{domain}"
+                    user = User(uid=0, name=u.name, username=username, email=email, role=u.role)
+                    dao.save(user)
 
         elif command == "crosslinked":
             # For CrossLinked, we need a masher
@@ -84,7 +92,12 @@ class Search(Action):
                 'header': [],
                 'engine': ['google', 'bing'],
                 'safe': int(self.config.get("CROSSLINKED", "safe") == 1),
-                'nformat': '{f}{last}',
+                'nformat':
+                    mail_format.
+                    replace("{0:.1}", "{f}").
+                    replace("{1:.1}", "{l}").
+                    replace("{0}", "{first}").
+                    replace("{1}", "{last}"),
                 'outfile': get_project_root().joinpath("data", "temp", self.config.get("CROSSLINKED", "outfile")),
                 'proxy': []
             }
@@ -95,23 +108,24 @@ class Search(Action):
             progress(f"Found {len(users)} LinkedIn accounts!", indent=2)
             info(f"Updating DB ...")
             for u in users:
-                username = masher.mash(u["first"], u["last"])
-                email = f"{username}@{domain}"
+                for domain in domains:
+                    username = masher.mash(u["first"], u["last"])
+                    email = f"{username}@{domain}"
 
-                user = User(
-                    uid=0,
-                    name=f'{u["first"].capitalize()} {u["last"].capitalize()}',
-                    username=username,
-                    email=email,
-                    role=u["title"]
-                )
-                dao.save(user)
+                    user = User(
+                        uid=0,
+                        name=f'{u["first"].capitalize()} {u["last"].capitalize()}',
+                        username=username,
+                        email=email,
+                        role=u["title"]
+                    )
+                    dao.save(user)
 
         elif command == "pwndb":
             info("Starting search on PwnDB")
 
             users = PwnDB(
-                domain=domain,
+                domain=domains,
                 socks_port=self.config.get("TOR", "socks_port")
             ).fetch()
             progress(f"Found {len(users)} leaked accounts!", indent=2)
@@ -119,30 +133,33 @@ class Search(Action):
             for u, leaks in users.items():
                 if not u or u.strip() == "":
                     continue
-                user = User(uid=0, name=None, username=u, email=f"{u}@{domain}", role=None)
-                user.leaks = [Leak(leak_id=0, password=leak, uid=0) for leak in leaks]
-                dao.save(user)
+                for domain in domains:
+                    user = User(uid=0, name=None, username=u, email=f"{u}@{domain}", role=None)
+                    user.leaks = [Leak(leak_id=0, password=leak, uid=0) for leak in leaks]
+                    dao.save(user)
         elif command == "google":
-            args = {
-                'active': True,
-                'data_source': 'google',
-                'domain': domain,
-                'search_max': 100,
-                'save_emails': False,
-                'delay': 15.0,
-                'url_timeout': 60,
-                'num_threads': 8
-            }
-            info("Starting passive/active search on Google")
-            th = theHarvester(**args)
-            mails = th.go()
-            progress(f"Found {len(mails)} mail accounts!", indent=2)
-            info(f"Updating DB ...")
-            for m in mails:
-                if not m or m.strip() == "":
-                    continue
-                u = m.split("@")[0]
-                user = User(uid=0, name=None, username=u, email=m, role=None)
-                dao.save(user)
+            for domain in domains:
+                info(f"[*] Searching google for {domain}")
+                args = {
+                    'active': True,
+                    'data_source': 'google',
+                    'domain': domain,
+                    'search_max': 100,
+                    'save_emails': False,
+                    'delay': 15.0,
+                    'url_timeout': 60,
+                    'num_threads': 8
+                }
+                info("Starting passive/active search on Google")
+                th = theHarvester(**args)
+                mails = th.go()
+                progress(f"Found {len(mails)} mail accounts!", indent=2)
+                info(f"Updating DB ...")
+                for m in mails:
+                    if not m or m.strip() == "":
+                        continue
+                    u = m.split("@")[0]
+                    user = User(uid=0, name=None, username=u, email=m, role=None)
+                    dao.save(user)
         success(f"Done!")
 

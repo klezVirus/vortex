@@ -1,13 +1,15 @@
 import os.path
 import re
 import sqlite3
+
+import pandas
 import pandas as pd
 from tabulate import tabulate
 
 from actions.action import Action
 from db.enums.types import EndpointType
 from db.handler import DBHandler
-from utils.utils import error, info, warning, success
+from utils.utils import error, info, warning, success, get_project_root
 
 
 class Db(Action):
@@ -25,13 +27,14 @@ class Db(Action):
                 error("The DB file exists and it was initialised, overwrite?")
                 if not self.wait_for_choice():
                     exit(1)
+                self.dbh.tear_down()
+                os.unlink(self.dbh.db)
             info("Initialising the DB")
             with self.dbh.create_cursor() as cursor:
                 cursor.execute(r'''
     CREATE TABLE IF NOT EXISTS users(
     uid integer primary key AUTOINCREMENT,
     name text,
-    username text,
     email text not null unique,
     job text,
     valid integer default 0);''')
@@ -40,21 +43,57 @@ class Db(Action):
     CREATE TABLE IF NOT EXISTS profiles(
     pid integer primary key AUTOINCREMENT,
     uid integer not null,
+    username text,
+    email text,
+    phone text,
     url text not null,
     ptype text not null);''')
+                cursor.connection.commit()
+                cursor.execute(r'''
+    CREATE TABLE IF NOT EXISTS domains(
+    did integer primary key AUTOINCREMENT,
+    name text not null,
+    level integer not null,
+    email_format text default null,
+    additional_info text default null);''')
+                cursor.connection.commit()
+                cursor.execute(r'''
+    CREATE TABLE IF NOT EXISTS ip_address(
+    did integer not null,
+    ip text not null,
+    PRIMARY KEY (did, ip));''')
                 cursor.connection.commit()
                 cursor.execute(r'''
     CREATE TABLE IF NOT EXISTS endpoints(
     eid integer primary key AUTOINCREMENT,
     target text not null,
-    endpoint_type text not null,
+    email_format text default null,
+    etype_ref integer not null,
+    additional_info text default null);''')
+                cursor.connection.commit()
+                cursor.execute(r'''
+    CREATE TABLE IF NOT EXISTS etypes(
+    etid integer primary key AUTOINCREMENT,
+    name text not null,
+    is_vpn integer not null default 0,
+    is_office integer not null default 0,
     is_o365 integer not null default 0);''')
                 cursor.connection.commit()
+                etypes = get_project_root().joinpath("config", "etypes.csv").absolute()
+                if not etypes.is_file():
+                    error("Supported Endpoint Types config file was not found. Aborting.")
+                    exit(1)
+                df = pandas.read_csv(str(etypes))
+                df.to_sql("etypes", cursor.connection, if_exists='append', index=False)
                 cursor.execute(r'''
     CREATE TABLE IF NOT EXISTS leaks(
     lid integer primary key AUTOINCREMENT,
     uid integer not null,
-    password text not null);''')
+    password text not null,
+    hash text default null,
+    address text default null,
+    phone text default null,
+    database text default null);''')
                 cursor.connection.commit()
                 cursor.execute(r'''
     CREATE TABLE IF NOT EXISTS found_logins(

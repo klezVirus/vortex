@@ -19,7 +19,7 @@ from utils.utils import info, error, progress, debug, success
 class Import(Action):
     def __init__(self, workspace):
         super().__init__(workspace)
-        self.commands = ["blues", "usernames", "emails", "pwndb", "domains", "origins"]
+        self.commands = ["blues", "usernames", "emails", "pwndb", "domains", "origins", "full-names"]
 
     def execute(self, **kwargs):
         self.dbh.connect()
@@ -65,6 +65,22 @@ class Import(Action):
                     username = masher.mash(name.split(" ")[0], name.split(" ")[-1])
                     email = f"{username}@{domain}"
                     user = User(uid=0, name=name, username=username, email=email, role=role)
+                    dao.save(user)
+        elif command == "full-names":
+            masher = NameMasher()
+            mail_format = self.dbh.get_email_format()
+            if not mail_format:
+                masher.select_format()
+                self.dbh.set_email_format(masher.fmt)
+            else:
+                masher.fmt = mail_format
+
+            with open(import_file, encoding="utf-8", errors="replace") as imports:
+                for row in imports.readlines():
+                    row = row.replace("'", "").replace("\n", "")
+                    username = masher.mash(row.split(" ")[0], row.split(" ")[-1])
+                    email = f"{username}@{domain}"
+                    user = User(uid=0, name=row, username=username, email=email, role="")
                     dao.save(user)
 
         elif command == "usernames":

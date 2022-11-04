@@ -26,9 +26,19 @@ class Action(ABC):
         self.endpoints = []
         self.debug = False
 
-    def add_endpoint(self, endpoint, endpoint_type):
+    def add_endpoint(self, enumerator, endpoint_type):
         self.lock.acquire()
-        self.endpoints.append({"endpoint": endpoint, "endpoint_type": endpoint_type})
+        add = True
+        for e in self.endpoints:
+            if e["endpoint"] == enumerator.target and endpoint_type == 1:
+                add = False
+                break
+        if add:
+            self.endpoints.append({
+                "endpoint": enumerator.target,
+                "endpoint_type": endpoint_type,
+                "additional_info": enumerator.additional_info
+            })
         self.lock.release()
 
     def print_queue(self):
