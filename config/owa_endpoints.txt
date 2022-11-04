@@ -1,0 +1,14 @@
+aspnet_client
+autodiscover
+autodiscover/autodiscover.xml
+ecp
+ews
+ews/exchange.asmx
+ews/services.wsdl
+exchange
+microsoft-server-activesync
+microsoft-server-activesync/default.eas
+oab
+owa
+powershell
+rpc

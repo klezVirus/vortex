@@ -1,1 +1,4 @@
 config-priv.ini
+api.ini
+!owa_endpoints.txt
+!etypes.csv
