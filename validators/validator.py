@@ -1,8 +1,11 @@
+import configparser
 import traceback
 from abc import ABC, abstractmethod
 from pydoc import locate
 
 import requests
+
+from utils.utils import get_project_root
 
 
 class Validator(ABC):
@@ -23,6 +26,23 @@ class Validator(ABC):
             "Te": "trailers",
             "Connection": "close"
         }
+        self.config = configparser.ConfigParser(allow_no_value=True, interpolation=configparser.ExtendedInterpolation())
+        self.config.read(str(get_project_root().joinpath("config", "config.ini")))
+        if int(self.config.get("NETWORK", "enabled")) != 0:
+            proxy = self.config.get("NETWORK", "proxy")
+            self.toggle_proxy(proxy=proxy)
+
+        self.session.max_redirects = 5
+        self.debug = int(self.config.get("DEBUG", "developer")) > 0
+
+    def toggle_proxy(self, proxy=None):
+        if self.session.proxies is not None and proxy is None:
+            self.session.proxies = None
+        else:
+            self.session.proxies = {
+                "http": proxy,
+                "https": proxy
+            }
 
     @abstractmethod
     def execute(self, **kwargs):
