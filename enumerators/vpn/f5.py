@@ -17,15 +17,18 @@ class F5Enumerator(VpnEnumerator):
         self.group = None
         self.select_group(group=group)
 
+    def setup(self, **kwargs):
+        pass
+
     def logfile(self) -> str:
         fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
+        return str(get_project_root().joinpath("data", "log").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
-    def validate(self) -> bool:
+    def validate(self) -> tuple:
         url = f"https://{self.target}"
         res = self.session.get(url, timeout=5)
         my_policy = any([r.headers.get("Location").find("my.policy") > -1 for r in res.history if r.headers.get("Location")])
-        return res.status_code == 200 and my_policy
+        return res.status_code == 200 and my_policy, res
 
     def find_groups(self):
         url = f"https://{self.target}/my.policy"

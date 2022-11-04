@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 import urllib.parse as urlparse
 
 from utils.ntlmdecoder import ntlmdecode
-from utils.utils import time_label, logfile, get_project_root, SimpleUTC, colors, error, debug
+from utils.utils import time_label, logfile, get_project_root, SimpleUTC, colors, error, debug, res_to_json
 
 
 # Disclaimer
@@ -30,31 +30,51 @@ class LyncEnumerator(VpnEnumerator):
         self.lync_base_url = None
         self.lync_internal_domain = None
         self.lync_auth_url = None
-        if not self.find_autodiscover_url() and self.debug:
-            debug(f"{self.__class__.__name__}: Couldn't detect autodiscover URL", indent=2)
-        if not self.find_s4b_url() and self.debug:
-            debug(f"{self.__class__.__name__}: Couldn't detect S4B URL", indent=2)
-        if not self.find_s4b_domain() and self.debug:
-            debug(f"{self.__class__.__name__}: Couldn't detect S4B Domain", indent=2)
+        self.last_response = None
+
+    def setup(self, **kwargs):
+        bkp = kwargs.copy()
+        ei = kwargs.get("Endpoint")
+        skype = ei.get("Lync", {})
+        self.lync_autodiscover_url = skype.get("autodiscover")
+        self.lync_base_url = skype.get("url")
+        self.lync_internal_domain = skype.get("domain")
+        self.lync_auth_url = skype.get("auth")
+        if not self.lync_autodiscover_url:
+            self.find_autodiscover_url()
+        if not self.lync_base_url:
+            self.find_s4b_url()
+        if not self.lync_internal_domain:
+            self.find_s4b_domain()
+        if self.lync_auth_url:
+            self.find_auth_url()
+
+        bkp["Endpoint"]["Lync"] = {
+            self.target: {
+                "autodiscover": self.lync_autodiscover_url,
+                "url": self.lync_base_url,
+                "auth": self.lync_auth_url,
+                "domain": self.lync_internal_domain
+            }
+        }
+        if bkp != kwargs:
+            self.additional_info = bkp
+            self.has_new_info = True
 
     def logfile(self) -> str:
         fmt = os.path.basename(self.config.get("LOGGING", "file"))
         return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
-    def validate(self) -> bool:
-        return self.lync_autodiscover_url is not None
+    def validate(self) -> tuple:
+        return self.lync_autodiscover_url is not None, None
 
     def find_autodiscover_url(self):
-        domain = self.target.split(":")[0]
-        urls = [
-            f"https://lyncdiscover.{domain}",
-            f"https://lyncdiscoverinternal.{domain}"
-        ]
-
-        for url in urls:
+        for scheme in ["http", "https"]:
             try:
+                url = f"{scheme}://{self.target}"
                 r = self.session.get(url)
-                if r.status_code == 401 or r.status_code == 403:
+                json_data = res_to_json(r)
+                if json_data.get("_links"):
                     self.lync_autodiscover_url = url
                     return True
             except ConnectionError:
@@ -68,8 +88,10 @@ class LyncEnumerator(VpnEnumerator):
             return False
         headers = {"Content-Type": "application/json"}
         r = requests.get(self.lync_autodiscover_url, headers=headers, verify=False).json()
-        if 'user' in r['_links']:
-            self.lync_base_url = r['_links']['user']['href']
+        if "_links" in r.keys() and ('user' in r.get('_links', {}).keys() or 'redirect' in r.get('_links', {}).keys()):
+            _links = r.get('_links', {})
+            self.lync_base_url = _links.get(
+                'user', _links.get("redirect")).get('href')
         return self.lync_base_url is not None
 
     def find_s4b_domain(self):
@@ -77,7 +99,7 @@ class LyncEnumerator(VpnEnumerator):
             return False
         if self.lync_base_url and 'online.lync.com' not in self.lync_base_url:
             r = self.session.get(self.lync_base_url)
-            self.lync_internal_domain = r.headers['X-MS-Server-Fqdn']
+            self.lync_internal_domain = r.headers.get('X-MS-Server-Fqdn')
         return self.lync_internal_domain is not None
 
     def find_auth_url(self):
@@ -94,19 +116,26 @@ class LyncEnumerator(VpnEnumerator):
             dict_data = xmltodict.parse(res.content)
             err = None
             try:
-                label = dict_data["S:Envelope"]["S:Body"]["S:Fault"]["S:Detail"]["psf:error"]["psf:internalerror"]["psf:text"].split(":")[0]
+                label = dict_data.get(
+                    "S:Envelope",        {}).get(
+                    "S:Body",            {}).get(
+                    "S:Fault",           {}).get(
+                    "S:Detail",          {}).get(
+                    "psf:error",         {}).get(
+                    "psf:internalerror", {}).get(
+                    "psf:text",          "").split(":")[0]
                 err = AadError.from_str(label)
             except:
                 pass
             if not err:
-                return True, str(res.status_code), len(res.content)
+                return True, res
             if err == AadError.MFA_NEEDED:
                 error(f"{username} need MFA", indent=2)
-                return True, str(res.status_code), len(res.content)
+                return True, res
             elif err == AadError.LOCKED:
                 error(f"{username} is locked", indent=2)
-                return True, str(res.status_code), len(res.content)
-            return False, str(res.status_code), len(res.content)
+                return True, res
+            return False, res
         else:
             url = self.lync_auth_url
             data = {
@@ -115,7 +144,7 @@ class LyncEnumerator(VpnEnumerator):
                 "password": password
             }
             res = self.session.post(url, data=data)
-            return "access_token" in res.json().keys(), str(res.status_code), len(res.content)
+            return "access_token" in res.json().keys(), res
 
     @staticmethod
     def soap_envelop(username, password):

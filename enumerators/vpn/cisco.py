@@ -18,11 +18,14 @@ class CiscoEnumerator(VpnEnumerator):
         self.select_group(group=group)
         self.passed = False
 
+    def setup(self, **kwargs):
+        pass
+
     def logfile(self) -> str:
         fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
+        return str(get_project_root().joinpath("data", "log").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
-    def validate(self) -> bool:
+    def validate(self) -> tuple:
         url = f"https://{self.target}/+CSCOE+/logon.html"
         res = self.session.get(url, timeout=5)
         soup = BeautifulSoup(res.text, features="html.parser")
@@ -30,7 +33,7 @@ class CiscoEnumerator(VpnEnumerator):
         return res.status_code == 200 and (
                 res.url.startswith(url) or
                 res.url.startswith(url.replace(":443", ""))
-            ) and element is not None
+            ) and element is not None, res
 
     def find_groups(self):
         url = f"https://{self.target}/+CSCOE+/logon.html"

@@ -9,7 +9,7 @@ class VpnEnumeratorFactory:
     def from_name(name: str, target, group=None) -> VpnEnumerator:
         enumerator_class = None
         try:
-            enumerator_class_string = f"enumerators.vpn.{name}.{name.capitalize()}Enumerator"
+            enumerator_class_string = f"enumerators.vpn.{name.lower()}.{name.capitalize()}Enumerator"
             # print(enumerator_class_string)
             enumerator_class = locate(enumerator_class_string)
             return enumerator_class(target, group=group)
@@ -24,7 +24,7 @@ class OfficeEnumeratorFactory:
     def from_name(name: str, target, group=None) -> VpnEnumerator:
         enumerator_class = None
         try:
-            enumerator_class_string = f"enumerators.office.{name}.{name.capitalize()}Enumerator"
+            enumerator_class_string = f"enumerators.office.{name.lower()}.{name.capitalize()}Enumerator"
             enumerator_class = locate(enumerator_class_string)
             return enumerator_class(target, group=group)
         except Exception as e:

@@ -19,23 +19,27 @@ class CitrixEnumerator(VpnEnumerator):
         self.group = group
         self.auth_url = None
         self.auth_method = None
-        self.select_auth_method()
         self.data = {}
-        self.fetch_auth_configuration()
+        if group != "dummy":
+            self.select_auth_method()
+            self.fetch_auth_configuration()
+
+    def setup(self, **kwargs):
+        pass
 
     def logfile(self) -> str:
         fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
+        return str(get_project_root().joinpath("data", "log").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
-    def validate(self) -> bool:
+    def validate(self) -> tuple:
         url = f"https://{self.target}/logon/LogonPoint/index.html"
         res = self.session.get(url, timeout=5)
         if res.status_code != 200:
-            return False
+            return False, res
         soup = BeautifulSoup(res.text, features="html.parser")
         element = soup.find_all("span", {"class": "citrixCopyright _ctxstxt_CitrixCopyright"})
         # New version of Citrix Identified
-        return len(element) > 0 and len(res.history) == 0 and res.url == url
+        return len(element) > 0 and len(res.history) == 0 and res.url == url, res
 
     def fetch_auth_configuration(self):
         url = f"https://{self.target}{self.auth_method}"

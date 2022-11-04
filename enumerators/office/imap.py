@@ -8,7 +8,7 @@ from enumerators.enumerator import VpnEnumerator
 from bs4 import BeautifulSoup
 
 from utils.ntlmdecoder import ntlmdecode
-from utils.utils import time_label, logfile, get_project_root
+from utils.utils import time_label, logfile, get_project_root, debug
 
 
 # Disclaimer
@@ -19,13 +19,19 @@ from utils.utils import time_label, logfile, get_project_root
 class ImapEnumerator(VpnEnumerator):
     def __init__(self, target, group=None):
         super().__init__()
+        if self.debug:
+            debug(f"{self.__class__.__name__}: Initializing")
+
         self.target = target
+
+    def setup(self, **kwargs):
+        pass
 
     def logfile(self) -> str:
         fmt = os.path.basename(self.config.get("LOGGING", "file"))
         return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
-    def validate(self) -> bool:
+    def validate(self) -> tuple:
         if self.target.find(":") > -1:
             host, port = self.target.split(":")
         else:
@@ -34,7 +40,7 @@ class ImapEnumerator(VpnEnumerator):
             server = imapclient.IMAPClient(self.target, port=port, ssl=True, timeout=3)
             server.login("IWouldNeverExistOnThisServer", "IWouldNeverBeAValidPassword")
         except Exception as e:
-            return e == imapclient.exceptions.LoginError
+            return e == imapclient.exceptions.LoginError, e
 
     def login(self, username, password) -> tuple:
         host, port = self.target.split(":")
@@ -43,8 +49,8 @@ class ImapEnumerator(VpnEnumerator):
         try:
             server = imapclient.IMAPClient(self.target, port=port, ssl=True, timeout=3)
             server.login(username, password)
-            return True, 0 , 0
+            return True, 0
         except imapclient.exceptions.LoginError:
-            return False, 0, 0
+            return False, 0
         except Exception as e:
             pass

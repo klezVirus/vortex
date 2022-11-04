@@ -17,7 +17,7 @@ from threading import Event
 import requests
 from colorama import Fore
 
-from enumerators.parallel import Worker
+from enumerators.parallel import Worker, ValidateWorker
 from utils.utils import get_project_root, colors
 
 
@@ -58,14 +58,21 @@ class VpnEnumerator(ABC):
         self.session.headers = self.__headers
         self.session.max_redirects = 2
         self.default_passwords = []
-        self.debug = int(self.config.get("DEBUG", "enabled")) > 0
+        self.debug = int(self.config.get("DEBUG", "developer")) > 0
         self.logger = logging.Logger(name="vortex")
         handler = logging.FileHandler(self.logfile(), mode="a")
         self.logger.addHandler(handler)
         self.logger.setLevel(level=logging.INFO if not self.debug else logging.DEBUG)
         self.found = []
         self.group = None
+        self.dao = None
         self.event_group_selected = Event()
+        self.additional_info = None
+        self.has_new_info = False
+
+    @abstractmethod
+    def setup(self, **kwargs):
+        pass
 
     @property
     def random_throttle(self):
@@ -118,7 +125,7 @@ class VpnEnumerator(ABC):
                     self.enqueue((user.email, password))
         self.__queue.join()
 
-    def safe_validate(self) -> bool:
+    def safe_validate(self) -> tuple:
         retries = self.__retry
         redirects = 0
         while True:
@@ -127,7 +134,7 @@ class VpnEnumerator(ABC):
                 return self.validate()
             except requests.exceptions.TooManyRedirects:
                 if redirects > 2:
-                    return False
+                    return False, None
                 redirects += 1
             except (
                 requests.ReadTimeout,
@@ -142,7 +149,7 @@ class VpnEnumerator(ABC):
             retries -= 1
             if retries == 0:
                 break
-        return False
+        return False, None
 
     def safe_login(self, username, password) -> tuple:
         retries = self.__retry
@@ -153,11 +160,26 @@ class VpnEnumerator(ABC):
             except (requests.ReadTimeout, ConnectionError, requests.exceptions.ConnectionError, requests.exceptions.TooManyRedirects):
                 retries -= 1
                 pass
-        return None, 0, 0
+        return False, None
+
+    def safe_user_enum(self, username) -> tuple:
+        retries = self.__retry
+        while retries > 0:
+            try:
+                time.sleep(self.random_throttle)
+                return self.user_enum(username)
+            except (requests.ReadTimeout, ConnectionError, requests.exceptions.ConnectionError, requests.exceptions.TooManyRedirects):
+                retries -= 1
+                pass
+        return False, None
 
     @abstractmethod
-    def validate(self) -> bool:
+    def validate(self) -> tuple:
         pass
+
+    # Not an abstract method because just a few enumerators will support it
+    def user_enum(self, user) -> tuple:
+        return False, None
 
     @abstractmethod
     def login(self, user, password) -> tuple:
@@ -171,6 +193,7 @@ class VpnEnumerator(ABC):
     def from_name(name: str):
         try:
             enumerator_class_string = f"enumerators.{name}.{name.capitalize()}Enumerator"
+            print(enumerator_class_string)
             enumerator_class = locate(enumerator_class_string)
             return enumerator_class
         except:
@@ -191,7 +214,7 @@ class VpnEnumerator(ABC):
                 "https": proxy
             }
 
-    def attempt_login(self, username, password):
+    def attempt_login(self, username, password, quiet=False):
         result = False
         msg = f"Login with {username}:"
         msg += password
@@ -199,11 +222,13 @@ class VpnEnumerator(ABC):
             if self.login(username, password):
                 self.found.append(f"{username},{password},SUCCESS")
                 msg = f"[+] {msg}... SUCCESS!"
-                print(colors(msg, Fore.GREEN))
+                if not quiet:
+                    print(colors(msg, Fore.GREEN))
                 return True
             else:
                 msg = f"[-] {msg}... FAILED"
-                print(msg)
+                if not quiet:
+                    print(msg)
                 return False
         except KeyboardInterrupt:
             exit(1)

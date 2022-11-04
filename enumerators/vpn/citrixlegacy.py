@@ -23,11 +23,14 @@ class CitrixlegacyEnumerator(VpnEnumerator):
         self.skip_group = False
         self.select_group(group)
 
+    def setup(self, **kwargs):
+        pass
+
     def logfile(self) -> str:
         fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
+        return str(get_project_root().joinpath("data", "log").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
-    def validate(self) -> bool:
+    def validate(self) -> tuple:
         url = f"https://{self.target}/vpn/index.html"
         res = self.session.get(url)
         soup = BeautifulSoup(res.text, features="html.parser")
@@ -40,7 +43,7 @@ class CitrixlegacyEnumerator(VpnEnumerator):
                 res.url.startswith(url) or
                 res.url.startswith(url.replace(":443", ""))
         )):
-            return False
+            return False, res
 
         result = e1 is not None or len(e2) > 0 or (
                 e3 is not None and (
@@ -48,7 +51,7 @@ class CitrixlegacyEnumerator(VpnEnumerator):
                 )
             )
 
-        return result
+        return result, res
 
     def find_groups(self):
         groups = []

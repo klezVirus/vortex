@@ -20,16 +20,19 @@ class PulseEnumerator(VpnEnumerator):
         else:
             self.select_group()
 
+    def setup(self, **kwargs):
+        pass
+
     def logfile(self) -> str:
         fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
+        return str(get_project_root().joinpath("data", "log").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
-    def validate(self) -> bool:
+    def validate(self) -> tuple:
         url = f"https://{self.target}/dana-na/auth/{self.dssignin}/welcome.cgi"
         res = self.session.get(url, timeout=5)
         soup = BeautifulSoup(res.text, features="html.parser")
         all_scripts = [s.get("src") for s in soup.find_all("script") if s.get("src") and s.get("src").find("dana-na") > -1]
-        return res.status_code == 200 and len(all_scripts) > 0
+        return res.status_code == 200 and len(all_scripts) > 0, res
 
     def find_groups(self):
         url = f"https://{self.target}/dana-na/auth/{self.dssignin}/welcome.cgi"

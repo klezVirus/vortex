@@ -15,24 +15,29 @@ class SonicwallEnumerator(VpnEnumerator):
         self.target = target.strip()
         self.dssignin = "url_default"
         self.__auth_url = None
-        self.set_auth_url()
-        self.select_group(group)
+        self.__groups = None
+        if group != "dummy":
+            self.set_auth_url()
+            self.select_group(group)
+
+    def setup(self, **kwargs):
+        pass
 
     def logfile(self) -> str:
         fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
+        return str(get_project_root().joinpath("data", "log").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
-    def validate(self) -> bool:
+    def validate(self) -> tuple:
         res = self.set_auth_url()
         if len(res.history) == 0:
-            return False
+            return False, res
         locations = []
         for r in res.history:
             location = r.headers.get("Location")
             if not location:
                 continue
             locations.append(location)
-        return any([location.find("__extraweb__") >= 0 for location in locations])
+        return any([location.find("__extraweb__") >= 0 for location in locations]), res
 
     def set_auth_url(self):
         url = f"https://{self.target}"

@@ -17,11 +17,14 @@ class FortinetEnumerator(VpnEnumerator):
         self.group = ""
         self.select_group(group=group)
 
+    def setup(self, **kwargs):
+        pass
+
     def logfile(self) -> str:
         fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
+        return str(get_project_root().joinpath("data", "log").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
-    def validate(self) -> bool:
+    def validate(self) -> tuple:
         url = f"https://{self.target}/remote/login"
         res = self.session.get(url, timeout=5)
         history = [r for r in res.history if r.status_code == 302]
@@ -31,8 +34,8 @@ class FortinetEnumerator(VpnEnumerator):
                     if header.lower() != "location":
                         continue
                     if value.find("lang=") > -1:
-                        return True
-        return False
+                        return True, res
+        return False, res
 
     def find_groups(self):
         url = f"https://{self.target}/remote/login"
