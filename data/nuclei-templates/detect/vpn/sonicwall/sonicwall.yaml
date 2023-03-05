@@ -1,0 +1,34 @@
+id: sonicwall-vpn-detect
+
+info:
+  name: SonicWall VPN Panel - Detect
+  author: klezVirus
+  severity: info
+  description: SonicWall VPN panel was detected.
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N
+    cvss-score: 0.0
+    cwe-id: CWE-200
+  tags: sonicwall,panel
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/auth1.html"
+
+    host-redirects: true
+    max-redirects: 2
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - 'auth[\-\d\.\(\)\w]+\.js'
+          - 'cookies[\-\d\.\(\)\w]*\.js'
+        condition: and
+    extractors:
+      - type: regex
+        part: body
+        group: -1 # Special case: returns a list of all matches
+        regex:
+          - 'option\s*value\=.(\w*)'
+        name: 'groups'

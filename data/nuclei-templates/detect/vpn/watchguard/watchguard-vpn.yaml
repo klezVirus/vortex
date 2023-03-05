@@ -1,0 +1,34 @@
+id: watchguard-panel-detect
+
+info:
+  name: Watch Guard VPN Panel - Detect
+  author: klezVirus
+  severity: info
+  description: Watch Guard VPN panel was detected.
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N
+    cvss-score: 0.0
+    cwe-id: CWE-200
+  tags: watchguard,panel
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/sslvpn_logon.shtml"
+
+    host-redirects: true
+    max-redirects: 2
+    matchers:
+      - type: word
+        part: body
+        words:
+          # Watch Guard Logo
+          - "auth_portal/Default/logo.gif"
+          - "script/general.js"
+        condition: or
+    extractors:
+      - type: dsl
+        part: body
+        dsl:
+          - 'soup.find("input", {"name": "fw_domain"}).get("value") if soup.find("input", {"name": "fw_domain"}) else ""'
+        name: 'domain'

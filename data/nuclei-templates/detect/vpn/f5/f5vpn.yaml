@@ -1,0 +1,27 @@
+id: f5-bigip-detect
+
+info:
+  name: F5 Big-IP VPN Panel - Detect
+  author: klezVirus
+  severity: info
+  description: F5 Big-IP VPN panel was detected.
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N
+    cvss-score: 0.0
+    cwe-id: CWE-200
+  tags: f5-bip-ip,panel
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/my.policy"
+
+    host-redirects: true
+    max-redirects: 2
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "_F5_challenge"
+          - "public/include/js/session_check.js"
+        condition: or

@@ -1,0 +1,34 @@
+id: ms-lync-discover-detect
+
+info:
+  name: Microsoft Lync Discover - Detect
+  author: klezVirus
+  severity: info
+  description: Microsoft Lync Discover was detected.
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N
+    cvss-score: 0.0
+    cwe-id: CWE-200
+  tags: microsoft,lync,autodiscover
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    host-redirects: true
+    max-redirects: 1
+    headers:
+      Accept: application/json
+      Content-Type: application/json
+    matchers:
+      - type: word
+        part: body
+        words:
+          - '{"_links":{"'
+        condition: or
+    extractors:
+      - type: dsl
+        dsl:
+          - 'resp.json().get("_links", {}).get("user", {}).get("href", "") if resp.json().get("_links", {}).get("user", {}).get("href", "") else resp.json().get("_links", {}).get("redirect", {}).get("href", "")'
+        name: 's4b_auth_url'

@@ -1,0 +1,28 @@
+id: okta-login-detect
+
+info:
+  name: Okta SSO - Detect
+  author: klezVirus
+  severity: info
+  description: Okta SSO login was detected.
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N
+    cvss-score: 0.0
+    cwe-id: CWE-200
+  tags: microsoft,okta,panel
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/authn"
+
+    host-redirects: true
+    max-redirects: 2
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "X-Okta-User-Agent-Extended"
+          - "okta-signin"
+          - "okta-sign-in"
+        condition: or

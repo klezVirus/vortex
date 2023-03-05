@@ -1,0 +1,32 @@
+id: ms-lync-detect
+
+info:
+  name: Microsoft Lync Discover - Detect
+  author: klezVirus
+  severity: info
+  description: Microsoft Lync Discover was detected.
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N
+    cvss-score: 0.0
+    cwe-id: CWE-200
+  tags: microsoft,lync,panel
+
+requests:
+  - method: HEAD
+    path:
+      - "{{BaseURL}}/WebTicket/oauthtoken"
+
+    host-redirects: true
+    max-redirects: 2
+    matchers:
+      - type: word
+        part: header
+        words:
+          - "X-MS-Server-Fqdn"
+        condition: or
+    extractors:
+      - type: kval
+        part: header
+        kval:
+        - "X-MS-Server-Fqdn"
+        name: "s4b_internal_server_fqdn"

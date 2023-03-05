@@ -1,0 +1,28 @@
+id: ms-adfs-login-detect
+
+info:
+  name: Microsoft ADFS Login Panel - Detect
+  author: klezVirus
+  severity: info
+  description: Microsoft ADFS Login was detected.
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N
+    cvss-score: 0.0
+    cwe-id: CWE-200
+  tags: microsoft,adfs,panel
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/adfs/ls/idpinitiatedsignon.aspx"
+
+    host-redirects: true
+    max-redirects: 2
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Microsoft Corporation"
+          - "kmsiArea"
+          - "/adfs/ls/idpinitiatedsignon.aspx?client-request-id"
+        condition: or

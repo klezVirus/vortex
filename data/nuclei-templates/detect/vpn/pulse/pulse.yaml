@@ -1,0 +1,34 @@
+id: pulse-vpn-detect
+
+info:
+  name: Pulse Secure VPN Panel - Detect
+  author: klezVirus
+  severity: info
+  description: Pulse Secure VPN panel was detected.
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N
+    cvss-score: 0.0
+    cwe-id: CWE-200
+  tags: pulse,panel
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/dana-na/auth/url_default/welcome.cgi"
+
+    host-redirects: true
+    max-redirects: 2
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - 'lastauthserverused[\_\-\d\.\(\)\w]+\.js'
+          - 'ds[\_\-\d\.\(\)\w]+\.css'
+        condition: and
+    extractors:
+      - type: regex
+        part: body
+        group: -1 # Special case: returns a list of all matches
+        regex:
+          - 'option\s*value\=.(\w*)'
+        name: 'groups'

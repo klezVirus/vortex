@@ -1,0 +1,38 @@
+id: fortinet-vpn-detect
+
+info:
+  name: Fortinet VPN Panel - Detect
+  author: klezVirus
+  severity: info
+  description: Fortinet VPN panel was detected.
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N
+    cvss-score: 0.0
+    cwe-id: CWE-200
+  tags: fortinet,panel
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/remote/login"
+
+    host-redirects: true
+    max-redirects: 2
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "/remote/logincheck"
+          - "sslvpn/js/login.js"
+        condition: or
+    extractors:
+      - type: dsl
+        part: body
+        dsl:
+          - 'soup.find("input", {"name": "realm"}).get("value") if soup.find("input", {"name": "realm"}) else "default"'
+        name: 'realm'
+      - type: dsl
+        part: body
+        dsl:
+          - 'soup.find("input", {"name": "grpid"}).get("value") if soup.find("input", {"name": "grpid"}) else "default"'
+        name: 'group'

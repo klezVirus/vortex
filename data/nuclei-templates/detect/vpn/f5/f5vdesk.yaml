@@ -1,0 +1,27 @@
+id: f5-vdesk-detect
+
+info:
+  name: F5 VDesk Panel - Detect
+  author: klezVirus
+  severity: info
+  description: F5 VDesk Panel was detected.
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N
+    cvss-score: 0.0
+    cwe-id: CWE-200
+  tags: f5-vdesk,panel
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/vdesk/hangup.php3"
+
+    host-redirects: true
+    max-redirects: 2
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "public/include/js/common.js"
+          - "public/include/js/u_plugin.js"
+        condition: or

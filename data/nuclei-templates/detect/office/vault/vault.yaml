@@ -1,0 +1,26 @@
+id: ms-azure-vault-detect
+
+info:
+  name: Microsoft Azure Vault - Detect
+  author: klezVirus
+  severity: info
+  description: Microsoft Azure Vault was detected.
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N
+    cvss-score: 0.0
+    cwe-id: CWE-200
+  tags: microsoft,azure,vault
+
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/common/oauth2/token"
+
+    host-redirects: true
+    max-redirects: 2
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "AADSTS900561"
+        condition: or
