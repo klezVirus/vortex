@@ -1,4 +1,5 @@
 #!/usr/bin/python
+from typing import Union
 
 # Created by Korey McKinley, Senior Security Consulant at LMG Security
 # https://lmgsecurity.com
@@ -23,7 +24,8 @@ import time
 
 from bs4 import BeautifulSoup
 
-from utils.utils import random_ascii_string
+from db.enums.errors import IfExistsResult
+from utils.utils import random_ascii_string, res_to_json
 from validators.validator import Validator
 
 if __name__ == '__main__':
@@ -37,18 +39,12 @@ if __name__ == '__main__':
 class O365Enum(Validator):
     def __init__(self):
         super().__init__()
+        self.urls = ["https://login.microsoftonline.com"]
 
-    def execute(self, **kwargs):
-        email = ""
-        if "email" not in kwargs.keys() and ("domain" not in kwargs.keys() or "user" not in kwargs.keys()):
-            return False
-        if "email" in kwargs.keys():
-            email = kwargs["email"]
-        elif "domain" in kwargs.keys() and "username" in kwargs.keys():
-            email = kwargs["username"] + "@" + kwargs["domain"]
+    def execute(self, email) -> tuple:
+        r"""
         # The first thing to get is the appId
-        url = "https://www.office.com/login?es=Click&ru=/&msafed=0"
-        res = self.session.get(url)
+        res = self.session.get(self.target + "")
         soup = BeautifulSoup(res.text, features="html.parser")
         me_control = soup.find("div", {"id": "meControl"})
         if not me_control:
@@ -56,11 +52,9 @@ class O365Enum(Validator):
         data_sign_in_settings = me_control["data-signinsettings"]
         settings = json.loads(data_sign_in_settings)
         app_id = settings["appId"]
-
-        url = "https://www.office.com/login?es=Click&ru=/&msafed=0"
-        res = self.session.get(url)
+        res = self.session.get(self.target_url)
         soup = BeautifulSoup(res.text, features="html.parser")
-
+        
         # There is a script with a JSON config containing the configuration data
         script = soup.find("script").text
         a = script.find("{")
@@ -93,10 +87,34 @@ class O365Enum(Validator):
             "OriginalRequest": s_ctx,
             "Username": email
         }
+        """
+        result = False
+        data = {"Username": email}
+        res = self.session.post(self.target + "/common/GetCredentialType", json=data)
+        throttle_detected = False
+        if res.status_code == 200:
+            json_res = res_to_json(res)
+            for k, v in json_res.items():
+                if k == "IfExistsResult":
+                    result = O365Enum.parse_result(v)
+                if k == "ThrottleStatus":
+                    throttle_detected = (v != 0)
 
-        url = "https://login.microsoftonline.com/common/GetCredentialType?mkt=en-US"
-        res = self.session.post(url, json=data)
+        # We couldn't verify it, returning false
+        if result:
+            if result == IfExistsResult.THROTTLE or throttle_detected:
+                return False, email
+            elif result in [IfExistsResult.VALID_USERNAME, IfExistsResult.VALID_USERNAME_2, IfExistsResult.VALID_USERNAME_DIFFERENT_IDP]:
+                return True, email
 
         credential_type = res.json()
-        return credential_type["IfExistsResult"] in [0, 6]
+        return credential_type["IfExistsResult"] in [0, 6], email
 
+    @staticmethod
+    def parse_result(result: Union[int, str]) -> IfExistsResult:
+        if isinstance(result, str):
+            try:
+                result = int(result)
+            except ValueError:
+                return IfExistsResult.UNKNOWN_ERROR
+        return IfExistsResult.from_value(result)

@@ -15,14 +15,12 @@
 # as many email addresses as possible through OSINT in a list with the
 # -f argument.
 import argparse
-from typing import Union
 
 import requests
 import re
 import time
 
-from db.enums.errors import IfExistsResult
-from utils.utils import res_to_json
+from utils.utils import extract_domain, is_subdomain, error
 from validators.validator import Validator
 
 if __name__ == '__main__':
@@ -33,23 +31,31 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 
-class O365Creeper(Validator):
+class Onedrive(Validator):
     def __init__(self):
         super().__init__()
-        self.urls = ["https://outlook.office365.com"]
+        self.__tenant_names = []
+        self.__target_credential_type = "https://login.microsoftonline.com/common/GetCredentialType"
+        self.__target_sharepoint = 'https://{}-my.sharepoint.com/personal/{}/_layouts/15/onedrive.aspx'
         self.session.headers["Accept"] = "application/json"
 
+    def setup(self, **kwargs):
+        self.__tenant_names = kwargs.get("domain", {}).get("Microsoft", {}).get("MS-Tenants", [])
+        if len(self.__tenant_names) == 0:
+            error("No Microsoft tenant names found.")
+            return
+        if kwargs.get("aws"):
+            self.setup_awsm(self.target, **kwargs)
+
     def execute(self, email) -> tuple:
-        result = False
-        try:
-            res = self.session.get(self.target + f"/autodiscover/autodiscover.json/v1.0/{email}?Protocol=rest")
-            if res.status_code == 200:
-                json_res = res_to_json(res)
-                for k, v in json_res.items():
-                    if k.lower() == "url":
-                        if v.find("outlook.office.com") > -1:
-                            result = True
-        except requests.exceptions.TooManyRedirects:
-            result = True
-        return result, email
+        for tenant in self.__tenant_names:
+            if self.validate(tenant, email):
+                return True, email
+        return False, email
+
+    def validate(self, tenant, email):
+        url = self.__target_sharepoint.format(tenant, email)
+        res = self.session.get(url)
+        return res.status_code in [200, 401, 403, 302]
+
 

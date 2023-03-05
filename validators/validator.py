@@ -1,59 +1,78 @@
 import configparser
+import time
 import traceback
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 from pydoc import locate
+from queue import Empty
 
 import requests
 
-from utils.utils import get_project_root
+from enumerators.interfaces.ignite import Ignite
+from utils.utils import success, error
 
 
-class Validator(ABC):
+class Validator(Ignite):
     def __init__(self):
-        self.session = requests.session()
-        self.session.verify = False
-        self.session.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:94.0) Gecko/20100101 Firefox/94.0",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "it-IT,it;q=0.8,en-US;q=0.5,en;q=0.3",
-            "Accept-Encoding": "gzip, deflate",
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Upgrade-Insecure-Requests": "1",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "same-origin",
-            "Sec-Fetch-User": "?1",
-            "Te": "trailers",
-            "Connection": "close"
-        }
-        self.config = configparser.ConfigParser(allow_no_value=True, interpolation=configparser.ExtendedInterpolation())
-        self.config.read(str(get_project_root().joinpath("config", "config.ini")))
-        if int(self.config.get("NETWORK", "enabled")) != 0:
-            proxy = self.config.get("NETWORK", "proxy")
-            self.toggle_proxy(proxy=proxy)
-
+        super().__init__()
         self.session.max_redirects = 5
-        self.debug = int(self.config.get("DEBUG", "developer")) > 0
+        self.domain = None
 
-    def toggle_proxy(self, proxy=None):
-        if self.session.proxies is not None and proxy is None:
-            self.session.proxies = None
-        else:
-            self.session.proxies = {
-                "http": proxy,
-                "https": proxy
-            }
+    def add_valid_user(self, username):
+        self.add_found({"username": username})
+
+    def enqueue(self, value):
+        self.queue.put(value, block=True, timeout=5)
+
+    def dequeue(self):
+        try:
+            return self.queue.get(block=True, timeout=1)
+        except Empty:
+            return None, None
+
+    def done(self):
+        try:
+            return self.queue.task_done()
+        except ValueError:
+            return
+
+    def parallel_validate(self, users: list):
+        with ThreadPoolExecutor(self.threads) as executor:
+            for result in executor.map(self.safe_validate, users):
+                if result[0]:
+                    with self.lock:
+                        success(f"Found valid user: {result[1]}")
+                    self.add_valid_user(result[1])
+                else:
+                    with self.lock:
+                        error(f"Invalid user: {result[1]}")
+
+    def safe_validate(self, email) -> tuple:
+        retries = self.retry
+        while retries > 0:
+            try:
+                time.sleep(self.random_throttle)
+                self.on_fire()  # The power of having interfaces
+                return self.execute(email=email)
+            except (requests.ReadTimeout, ConnectionError, requests.exceptions.ConnectionError, requests.exceptions.TooManyRedirects):
+                retries -= 1
+                pass
+        return False, None
+
+    def setup(self, **kwargs):
+        if kwargs.get("aws"):
+            self.setup_awsm(self.target, **kwargs)
 
     @abstractmethod
-    def execute(self, **kwargs):
+    def execute(self, email) -> tuple:
         pass
 
     @staticmethod
     def from_name(name: str):
         try:
-            validator_class_string = f"validators.validator.{name.capitalize()}"
+            validator_class_string = f"validators.{name.lower()}.{name}"
             validator_class = locate(validator_class_string)
-            return validator_class
+            return validator_class()
         except:
             traceback.print_exc()
             pass
