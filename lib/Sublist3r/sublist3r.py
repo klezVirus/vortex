@@ -2,6 +2,7 @@
 # coding: utf-8
 # Sublist3r v1.0
 # By Ahmed Aboul-Ela - twitter.com/aboul3la
+import ssl
 
 import argparse
 import hashlib
@@ -17,6 +18,10 @@ import threading
 import time
 import traceback
 from collections import Counter
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+
+from utils.utils import success
 
 # external modules
 try:
@@ -874,7 +879,7 @@ class PassiveDNS(enumratorBaseThreaded):
 
 
 class PortScanner:
-    def __init__(self, subdomains=None, ports=None, origins:list=None):
+    def __init__(self, subdomains: list = None, ports: list = None, origins: list = None):
         self.subdomains = subdomains
         self.ports = ports
         self.lock = None
@@ -887,6 +892,20 @@ class PortScanner:
             self.origins = []
             self.action = self.port_scan
 
+        self.ssl_origins = {}
+        for origin in self.origins:
+            self.ssl_origins[origin] = {"ssl": False, "subject": None}
+
+    def reset_ssl_origins(self):
+        """
+        This method is necessary to reset the ssl_origins dict after a port scan
+        to remove the ports that are not open, improving the performance of the
+        scan.
+        :return: None
+        """
+        for origin in self.origins:
+            self.ssl_origins[origin] = {"ssl": False, "subject": None}
+
     def port_scan_list(self, origin):
         try:
             self.lock.acquire()
@@ -895,10 +914,12 @@ class PortScanner:
             host, port = origin.split(":")
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.settimeout(2)
+                    s.settimeout(1)
                     result = s.connect_ex((host, int(port)))
                     if result != 0:
                         self.origins.remove(origin)
+                    else:
+                        success(f"Found origin: {origin}")
             except socket.gaierror as e:
                 self.origins.remove(origin)
             except Exception as e:
@@ -913,7 +934,7 @@ class PortScanner:
         for port in ports:
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.settimeout(2)
+                    s.settimeout(1)
                     result = s.connect_ex((host, int(port)))
                     if result == 0:
                         openports.append(port)
@@ -921,6 +942,30 @@ class PortScanner:
             except Exception:
                 pass
         self.lock.release()
+
+    def ssl_scan(self, origin):
+        # Here the port is already deemed to be open
+        self.lock.acquire()
+        host, port = origin.split(":")
+        port = int(port)
+        try:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            # If SSL is enabled, the server socket is using a certificate
+            # It might even be a self-signed certificate, but it must contain a subject name
+            with ctx.wrap_socket(socket.socket(), server_hostname=host) as s:
+                s.connect((host, port))
+                # cert = s.getpeercert(True)
+                # pem_bytes = ssl.DER_cert_to_PEM_cert(cert).encode()
+                # _cert = x509.load_pem_x509_certificate(pem_bytes, default_backend())
+                subject = ""
+                # subject = _cert.subject.rfc4514_string().replace("CN=", "")
+                self.ssl_origins[f"{host}:{port}"] = {"ssl": True, "subject": subject}
+        except:
+            pass
+        self.lock.release()
+
 
     def run(self):
         self.lock = threading.BoundedSemaphore(value=20)
@@ -942,6 +987,25 @@ class PortScanner:
                 t.join()
             except KeyboardInterrupt:
                 pass
+
+    def run_ssl(self):
+        self.lock = threading.BoundedSemaphore(value=20)
+        threads = []
+        # Create
+        for origin in self.origins:
+            threads.append(threading.Thread(target=self.ssl_scan, args=(origin,)))
+        # Start all
+        for t in threads:
+            t.daemon = True
+            t.start()
+        # Wait all
+        for t in threads:
+            try:
+                t.join()
+            except KeyboardInterrupt:
+                pass
+
+
 
 
 def main(domain, threads, savefile, ports, silent, verbose, enable_bruteforce, engines, subs=None, resolvers=None):

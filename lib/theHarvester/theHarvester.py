@@ -8,14 +8,18 @@ import threading
 import time
 
 # https://stackoverflow.com/questions/27981545/suppress-insecurerequestwarning-unverified-https-request-is-being-made-in-pytho#28002687
+import traceback
+
 import urllib3
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from utils.utils import error, info
 
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Third party Python libraries.
 import googlesearch  # noqa
 import requests  # noqa
+
 
 # Custom Python libraries.
 
@@ -34,24 +38,28 @@ class Worker(threading.Thread):
             # Grab URL off the queue.
             url = self.threading_object.queue.get()
             try:
-                print("[+] Scraping any emails from: {}".format(url))
+                info("Scraping any emails from: {}".format(url))
 
                 headers = {"User-Agent": "Googlebot/2.1 (+http://www.google.com/bot.html"}
 
-                response = requests.get(url, proxies=self.threading_object.proxies, headers=headers, verify=False, timeout=self.threading_object.url_timeout)
+                response = requests.get(url, proxies=self.threading_object.proxies, headers=headers, verify=False,
+                                        timeout=self.threading_object.url_timeout)
 
                 if response.status_code == 200:
                     response_text = response.text
                     for badchar in (">", ":", "=", "<", "/", "\\", ";", "&", "%3A", "%3D", "%3C"):
                         response_text = response_text.replace(badchar, " ")
 
-                    emails = re.findall(r"[a-zA-Z0-9.-_]*@(?:[a-z0-9.-]*\.)?" + self.threading_object.__domain, response_text, re.I)
+                    emails = re.findall(r"[a-zA-Z0-9.-_]*@(?:[a-z0-9.-]*\.)?" + self.threading_object.domain,
+                                        response_text, re.I)
                     if emails:
                         for e in emails:
                             self.threading_object.all_emails.append(e)
 
+            except requests.exceptions.RequestException as e:
+                pass
             except Exception as e:
-                print("[-] Exception: {}".format(e))
+                error(f"Exception: {e}")
 
             self.threading_object.queue.task_done()
 
@@ -59,7 +67,8 @@ class Worker(threading.Thread):
 class theHarvester:
     """theHarvester class"""
 
-    def __init__(self, active, data_source, domain, search_max, save_emails, delay, url_timeout, num_threads, proxy=None):
+    def __init__(self, active, data_source, domain, search_max, save_emails, delay, url_timeout, num_threads,
+                 proxy=None):
         """Initialize theHarvester object"""
 
         self.active = active
@@ -113,6 +122,22 @@ class theHarvester:
                     fh.write("{}\n".format(email))
         return self.parsed_emails
 
+    def safe_search(self, query, start: int = None, extra_params: dict = None, tbs: str = ""):
+        urls = []
+        try:
+            urls = googlesearch.search(
+                query=query,
+                start=start,
+                stop=self.search_max,
+                num=self.num_max,
+                pause=self.delay,
+                extra_params=extra_params,
+                tbs=tbs
+            )
+        except:
+            pass
+        return urls
+
     def google_search(self):
 
         # Search for emails not within the domain's site (-site:<domain>)
@@ -120,14 +145,11 @@ class theHarvester:
 
         print("[*] (PASSIVE) Searching for emails NOT within the domain's site: {}".format(query))
 
-        for url in googlesearch.search(
-            query,
-            start=0,
-            stop=self.search_max,
-            num=self.num_max,
-            pause=self.delay,
-            extra_params={"filter": "0"},
-            tbs="li:1",  # Verbatim mode.  Doesn't return suggested results with other domains.
+        for url in self.safe_search(
+                query,
+                start=0,
+                extra_params={"filter": "0"},
+                tbs="li:1",  # Verbatim mode.  Doesn't return suggested results with other domains.
         ):
             self.queue.put(url)
 
@@ -136,14 +158,11 @@ class theHarvester:
             query = "site:{}".format(self.domain)
 
             print("[*] (ACTIVE) Searching for emails within the domain's sites: {}".format(self.domain))
-            for url in googlesearch.search(
-                query,
-                start=0,
-                stop=self.search_max,
-                num=self.num_max,
-                pause=self.delay,
-                extra_params={"filter": "0"},
-                tbs="li:1",  # Verbatim mode.  Doesn't return suggested results with other domains.
+            for url in self.safe_search(
+                    query,
+                    start=0,
+                    extra_params={"filter": "0"},
+                    tbs="li:1",  # Verbatim mode.  Doesn't return suggested results with other domains.
             ):
                 self.queue.put(url)
 

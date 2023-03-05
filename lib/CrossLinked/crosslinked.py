@@ -4,6 +4,7 @@
 
 import logging
 import argparse
+import traceback
 from sys import exit
 from bs4 import BeautifulSoup
 from unidecode import unidecode
@@ -34,7 +35,7 @@ class CrossLinked():
            'bing': 'http://www.bing.com/search?q=site:linkedin.com/in+"{}"&first={}'}
 
     def __init__(self, engine, company, timeout, conn_timeout, headers=None, proxies=None, jitter=1, safe=False,
-                 debug=False):
+                 debug=False, masher=None):
         self.page_links = 0  # Total links found by search engine w/ our domain in URL
         self.total_links = 0  # Total Links found by search engine
         self.links = []
@@ -49,6 +50,7 @@ class CrossLinked():
         self.engine = engine
         self.company = company
         self.key = 'linkedin.com/in'
+        self.masher = masher
 
         self.linkedin = {}
         self.users = {}
@@ -139,11 +141,15 @@ class CrossLinked():
             k = name.lower()
             if k not in self.linkedin:
                 self.linkedin[k] = {}
+                self.linkedin[k]['full'] = name
                 self.linkedin[k]['last'] = name.split(' ')[1].lower()
                 self.linkedin[k]['first'] = name.split(' ')[0].lower()
                 self.linkedin[k]['title'] = title.strip().lower()
-                self.linkedin[k]['format'] = formatter(args.nformat, self.linkedin[k]['first'],
-                                                       self.linkedin[k]['last'])
+                if not self.masher:
+                    self.linkedin[k]['format'] = formatter(args.nformat, self.linkedin[k]['first'],
+                                                           self.linkedin[k]['last'])
+                else:
+                    self.linkedin[k]['format'] = self.masher.handle_name(self.linkedin[k]['full'])
                 logger.debug("PASS: {} (SAFE:{}) - {}".format(self.engine.upper(), self.safe, link.text), fg='green')
                 return True
 
@@ -185,7 +191,7 @@ def getUsers(engine, args):
 def getUsersKey(_engine, **kwargs):
     engine = _engine
     from utils.utils import progress, error
-    progress("Searching {} for valid employee names at \"{}\"".format(engine, kwargs["company_name"]), indent=2)
+    progress("Searching {} for valid employee names at \"{}\"".format(engine, kwargs["company_name"]))
     c = CrossLinked(engine,
                     kwargs["company_name"],
                     kwargs["timeout"],
@@ -194,11 +200,13 @@ def getUsersKey(_engine, **kwargs):
                     kwargs["proxy"],
                     kwargs["jitter"],
                     kwargs["safe"],
-                    kwargs["debug"])
+                    kwargs["debug"],
+                    masher=kwargs.get("masher")
+                    )
     if engine in c.URL.keys():
         c.search()
     if not c.linkedin:
-        error('No results found', indent=2)
+        error('No results found')
     return c.linkedin
 
 
@@ -229,15 +237,20 @@ def crosslinked_run(**kwargs):
     for engine in kwargs["engine"]:
         for name, data in getUsersKey(engine, **kwargs).items():
             try:
-                id = formatter(kwargs["nformat"], data['first'], data['last'])
+                masher = kwargs.get("masher")
+                if masher:
+                    id = masher.handle_name(data['full'])
+                else:
+                    id = formatter(kwargs["nformat"], data['first'], data['last'])
                 if id not in names:
                     names[id] = data
             except:
+                traceback.print_exc()
                 pass
 
     for id, data in names.items():
         if kwargs["verbose"]:
-            success("{:30} - {}".format(data['first'] + " " + data['last'], data['title']), indent=2)
+            success("{:30} - {}".format(data['first'] + " " + data['last'], data['title']))
     return names.values()
 
 
