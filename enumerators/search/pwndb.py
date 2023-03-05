@@ -8,26 +8,15 @@ from urllib3.exceptions import InsecureRequestWarning
 from stem import Signal
 from stem.control import Controller
 
+from enumerators.interfaces.searcher import Searcher
+from enumerators.search.structures.unified_user_data import UnifiedUserData
 
-class PwnDB:
-    def __init__(self, domain, socks_port=None):
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:93.0) Gecko/20100101 Firefox/93.0",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "it-IT,it;q=0.8,en-US;q=0.5,en;q=0.3", "Accept-Encoding": "gzip, deflate",
-            "Content-Type": "application/x-www-form-urlencoded", "Origin": "http://pwndb2am4tzkvold.onion",
-            "Upgrade-Insecure-Requests": "1", "Sec-Fetch-Dest": "document", "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "same-origin", "Sec-Fetch-User": "?1", "Te": "trailers",
-            "Connection": "close"
-        }
-        # Domain to search against
-        self.domain = domain
+
+class Pwndb(Searcher):
+    def __init__(self):
         self.pwndb_url = "http://pwndb2am4tzkvold.onion"
-        self.session = requests.session()
-        self.session.verify = False
-        self.session.headers = self.headers
-        # We need TOR for this
-        self.socks_port = socks_port
+        self.socks_port = None
+        self.domain = None
         if not self.socks_port or self.socks_port == "":
             self.auto_select()
         self.toggle_proxy(f"socks5h://127.0.0.1:{self.socks_port}")
@@ -35,6 +24,14 @@ class PwnDB:
             self.authenticate()
         except:
             pass
+
+    def setup(self, **kwargs):
+        self.domain = kwargs.get("domain")
+        self.socks_port = kwargs.get("socks_port")
+
+    def search(self):
+        for d in self.domain:
+            self.fetch(d)
 
     def auto_select(self):
         for port in [9050, 9150]:
@@ -46,24 +43,15 @@ class PwnDB:
         if not self.socks_port:
             raise ConnectionError("Tor Service Not Listening on known ports")
 
-    def toggle_proxy(self, proxy=None):
-        if self.session.proxies is not None and proxy is None:
-            self.session.proxies = None
-        else:
-            self.session.proxies = {
-                "http": proxy,
-                "https": proxy
-            }
-
     def authenticate(self):
         with Controller.from_port(port=9151) as controller:
             controller.authenticate()
             controller.signal(Signal.NEWNYM)
 
-    def fetch(self):
+    def fetch(self, domain):
         data = {
             "luser": "",
-            "domain": self.domain,
+            "domain": domain,
             "luseropr": "1",
             "domainopr": "0",
             "submitform": "em"
@@ -91,7 +79,13 @@ class PwnDB:
                     leaks[current_user] = []
                 if password not in leaks[current_user]:
                     leaks[current_user].append(password)
-        return leaks
+        for u, leak in leaks.items():
+            self.uu_data.append(
+                UnifiedUserData(
+                    name=u,
+                    password=leak
+                )
+            )
 
 
 if __name__ == '__main__':
@@ -101,6 +95,6 @@ if __name__ == '__main__':
     parser.add_argument("domain", help="Target Company Domain")
     args = parser.parse_args()
 
-    pwn = PwnDB(domain=args.domain)
+    pwn = Pwndb(domain=args.domain)
     leaks = pwn.fetch()
-    print(json.dumps(leaks, indent=2))
+    print(json.dumps(leaks))
