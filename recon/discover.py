@@ -5,10 +5,12 @@ import socket
 import logging
 import requests
 import dns.resolver
+import dns.rdatatype
 import xmltodict
 from requests import request
 
 from utils.ntlmdecoder import ntlmdecode
+
 try:
     from utils.utils import *
 except:
@@ -34,6 +36,8 @@ class DomainDiscovery:
         self.dns_records = {}
         self._mx_records = None
         self._txt_records = None
+        self._cname_records = None
+        self._ns_records = None
         self._autodiscover = None
         self._userrealm = None
         self._openid_configuration = None
@@ -60,12 +64,46 @@ class DomainDiscovery:
         }
         self.config = configparser.ConfigParser(allow_no_value=True, interpolation=configparser.ExtendedInterpolation())
         self.config.read(str(get_project_root().joinpath("config", "config.ini")))
+        self.__threads = 10
+        if int(self.config.get("NETWORK", "threads")) != 0:
+            self.__threads = int(self.config.get("NETWORK", "threads"))
         if int(self.config.get("NETWORK", "enabled")) != 0:
             proxy = self.config.get("NETWORK", "proxy")
             self.toggle_proxy(proxy=proxy)
 
         self.session.max_redirects = 5
         self.debug = int(self.config.get("DEBUG", "developer")) > 0
+        self.cdns = [
+            'cloudfront',        'appspot.com',          'msecnd.net',
+            'aspnetcdn.com',     'azureedge.net',        'azurefd.net',
+            'a248.e.akamai.net', 'secure.footprint.net', 'cloudflare',
+            'unbouncepages.com', 'x.incapdns.net',       'fastly'
+        ]
+        self.resolver = dns.resolver
+        self.__init_resolvers()
+        self.lock = threading.Lock()
+
+    def add_owa(self, url):
+        self.lock.acquire()
+        if self._owa is None:
+            self._owa = []
+        if url not in self._owa:
+            self._owa.append(url)
+        self.lock.release()
+
+    def __init_resolvers(self):
+        self.resolver.default_resolver = dns.resolver.Resolver(configure=False)
+        self.resolver.default_resolver.nameservers = [
+            '209.244.0.3', '209.244.0.4', '64.6.64.6', '64.6.65.6', '8.8.8.8',
+            '8.8.4.4', '84.200.69.80', '84.200.70.40', '8.26.56.26',
+            '8.20.247.20', '208.67.222.222', '208.67.220.220', '199.85.126.10',
+            '199.85.127.10', '81.218.119.11', '209.88.198.133', '195.46.39.39',
+            '195.46.39.40', '96.90.175.167', '193.183.98.154', '208.76.50.50',
+            '208.76.51.51', '216.146.35.35', '216.146.36.36', '37.235.1.174',
+            '37.235.1.177', '198.101.242.72', '23.253.163.53', '77.88.8.8',
+            '77.88.8.1', '91.239.100.100', '89.233.43.71', '74.82.42.42',
+            '109.69.8.51'
+        ]
 
     def toggle_proxy(self, proxy=None):
         if self.session.proxies is not None and proxy is None:
@@ -104,7 +142,7 @@ class DomainDiscovery:
             j = {"data": j}
 
         if j:
-            success(f'\n{json.dumps(j, indent=2)}')
+            success(f'\n{json.dumps(j)}')
         else:
             warning('No results.')
 
@@ -118,6 +156,7 @@ class DomainDiscovery:
             try:
                 content = self.session.get(url=url).json()
             except Exception as e:
+                print(e)
                 pass
             self._openid_configuration = content if content else {}
 
@@ -134,6 +173,7 @@ class DomainDiscovery:
                 try:
                     content = self.session.get(url=url).json()
                 except Exception as e:
+                    print(e)
                     pass
                 self._userrealm = content
         except:
@@ -146,12 +186,38 @@ class DomainDiscovery:
                 info(f'Checking MX records for {self.domain}')
                 mx_records = []
                 with suppress(Exception):
-                    for x in dns.resolver.resolve(self.domain, 'MX'):
+                    for x in self.resolver.resolve(self.domain, 'MX'):
                         mx_records.append(x.to_text())
                 self._mx_records = mx_records
         except:
             pass
         return self._mx_records
+
+    def get_ns_records(self):
+        try:
+            if self._ns_records is None:
+                info(f'Checking NS records for {self.domain}')
+                records = []
+                with suppress(Exception):
+                    for x in self.resolver.resolve(self.domain, 'NS'):
+                        records.append(x.to_text())
+                self._ns_records = records
+        except:
+            pass
+        return self._ns_records
+
+    def get_cname_records(self):
+        try:
+            if self._cname_records is None:
+                info(f'Checking CNAME records for {self.domain}')
+                records = []
+                with suppress(Exception):
+                    for x in self.resolver.resolve(self.domain, 'CNAME'):
+                        records.append(x.to_text())
+                self._cname_records = records
+        except:
+            pass
+        return self._cname_records
 
     def get_txt_records(self):
         try:
@@ -159,7 +225,7 @@ class DomainDiscovery:
                 info(f'Checking TXT records for {self.domain}')
                 txt_records = []
                 with suppress(Exception):
-                    for x in dns.resolver.resolve(self.domain, 'TXT'):
+                    for x in self.resolver.resolve(self.domain, 'TXT'):
                         txt_records.append(x.to_text())
                 self._txt_records = txt_records
         except:
@@ -170,7 +236,7 @@ class DomainDiscovery:
         try:
             records = []
             with suppress(Exception):
-                for x in dns.resolver.resolve(self.domain, 'A'):
+                for x in self.resolver.resolve(self.domain, 'A'):
                     records.append(x.to_text())
             return records
         except:
@@ -180,10 +246,36 @@ class DomainDiscovery:
         try:
             records = []
             with suppress(Exception):
-                for x in dns.resolver.resolve(self.domain, 'AAAA'):
+                for x in self.resolver.resolve(self.domain, 'AAAA'):
                     records.append(x.to_text())
             return records
         except:
+            return None
+
+    def is_frontable(self):
+        try:
+            records = []
+            # Iterate through response and check for potential CNAMES
+            query = self.resolver.resolve(self.domain, dns.rdatatype.from_text('A'))
+            for i in query.response.answer:
+                for j in i.items:
+                    target = j.to_text()
+                    for cdn in self.cdns:
+                        if cdn in target:
+                            records.append({
+                                "CDN": cdn,
+                                "CDN_URL": target
+                            })
+            return records
+
+        except dns.resolver.NXDOMAIN:
+            return None
+        except dns.resolver.NoAnswer:
+            return None
+        except dns.resolver.LifetimeTimeout:
+            return None
+        except Exception as e:
+            error("Exception from `is_frontable`: {}".format(e))
             return None
 
     def autodiscover(self):
@@ -241,7 +333,9 @@ class DomainDiscovery:
                 response = requests.post(
                     url,
                     headers=headers,
-                    data=data
+                    data=data,
+                    verify=self.session.verify,
+                    proxies=self.session.proxies
                 )
 
                 x = xmltodict.parse(response.text)
@@ -272,11 +366,12 @@ class DomainDiscovery:
                     success(f'Found {len(domains):,} domains under tenant!')
 
                 self._msol_domains = domains
-        except:
+        except Exception as e:
+            error("Exception from `get_msol_domains`: {}".format(e))
             pass
         return self._msol_domains
 
-    def get_onedrive_tenant_names(self):
+    def get_onedrive_tenant_names(self) -> list:
 
         try:
 
@@ -317,8 +412,8 @@ class DomainDiscovery:
             owas = set()
 
             schemes = [
-                'http://',
-                'https://'
+                'http',
+                'https'
             ]
 
             urls = [
@@ -334,29 +429,35 @@ class DomainDiscovery:
             urls += [f'{mx.split()[-1].strip(".")}/autodiscover/autodiscover.xml' for mx in self._mx_records]
             urls = list(set(urls))
 
+            for scheme in schemes:
+                for u in urls:
+                    owas.add(f'{scheme}://{u}')
+
+            with ThreadPoolExecutor(max_workers=self.__threads) as executor:
+                executor.map(self.check_owa, owas)
+
+        return self._owa
+
+    def check_owa(self, url):
+        try:
             headers = {
                 'Content-Type': 'text/xml'
             }
-
-            for scheme in schemes:
-                for u in urls:
-                    url = f'{scheme}{u}'
-                    r = self.session.get(
-                        url=url,
-                        headers=headers,
-                    )
-                    response_headers = r.headers
-                    if 'x-owa-version' in response_headers.keys() or \
-                            'NTLM' in response_headers.get('www-authenticate'):
-                        success(f'Found OWA at {r.url}')
-                        self.owa_internal_domain(
-                            url=r.request.url
-                        )
-                        owas.add(r.request.url)
-
-            self._owa = list(owas)
-
-        return self._owa
+            r = self.session.get(
+                url=url,
+                headers=headers
+            )
+            response_headers = r.headers
+            rhk = [h.lower() for h in r.headers]
+            if 'x-owa-version' in rhk or \
+                    'NTLM' in response_headers.get('www-authenticate'):
+                success(f'Found OWA at {r.url}')
+                self.owa_internal_domain(
+                    url=r.request.url
+                )
+                self.add_owa(r.request.url)
+        except Exception as e:
+            pass
 
     def owa_internal_domain(self, url=None):
 
@@ -391,8 +492,8 @@ class DomainDiscovery:
         netbios_domain = ''
         for url in urls:
             r = self.session.post(url, headers={
-                    'Authorization': 'NTLM TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAGAbEdAAAADw=='
-                })
+                'Authorization': 'NTLM TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAGAbEdAAAADw=='
+            })
             ntlm_info = {}
             www_auth = getattr(r, 'headers', {}).get('WWW-Authenticate', '')
             if www_auth:
@@ -413,4 +514,3 @@ class DomainDiscovery:
                 self.printjson(ntlm_info)
                 break
         return netbios_domain
-
