@@ -1,4 +1,5 @@
 import os
+import random
 import uuid
 
 from db.enums.errors import AadError
@@ -13,60 +14,35 @@ from utils.utils import logfile, get_project_root, error, is_subdomain, extract_
 # CREDIT: @byt3bl33d3r
 
 
-class MsgraphEnumerator(VpnEnumerator):
+class O365Enumerator(VpnEnumerator):
     def __init__(self, target, group=None):
         super().__init__()
-        if self.debug:
-            debug(f"{self.__class__.__name__}: Initializing")
-
-        self.target = target
-        self.auth_url = "https://login.microsoft.com/common/oauth2/token"
+        self.urls = ["https://login.microsoft.com"]
         self.user_realm = None
+        self.client_ids = [
+            "4345a7b9-9a63-4910-a426-35363201d503",
+            "1b730954-1685-4b74-9bfd-dac224a7b894",
+            "0a7bdc5c-7b57-40be-9939-d4c5fc7cd417",
+            "1950a258-227b-4e31-a9cf-717495945fc2",
+            "00000002-0000-0000-c000-000000000000",
+            "872cd9fa-d31f-45e0-9eab-6e460a02d1f1",
+            "04b07795-8ddb-461a-bbee-02f9e1bf7b46",
+            "30cad7ca-797c-4dba-81f6-8b01f6371013"
+        ]
 
     def setup(self, **kwargs):
-        bkp = kwargs.copy()
         di = kwargs.get("Domain")
-        if not self.user_realm:
-            self.user_realm = di.get("Microsoft", {}).get("UserRealm")
-        if not self.user_realm:
-            _, _ = self.get_user_realm()
-        di["Microsoft"]["UserRealm"] = self.user_realm
-        bkp["Domain"] = di
-        if bkp != kwargs:
-            self.additional_info = bkp
-            self.has_new_info = True
-
-    def logfile(self) -> str:
-        fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
-
-    def get_user_realm(self) -> tuple:
-        domain = extract_domain(self.target)
-
-        if is_subdomain(domain):
-            return False, None
-        url = f"https://login.microsoftonline.com:443/getuserrealm.srf?login={domain}"
-        res = None
-        try:
-            res = self.session.get(url)
-            user_realm = res.json()
-            self.user_realm = user_realm
-            return True, res
-        except:
-            return False, res
+        self.user_realm = di.get("Microsoft", {}).get("UserRealm")
+        super().setup(**kwargs)
 
     def validate(self) -> tuple:
-        b, r = self.get_user_realm()
-        if not self.user_realm and not b:
-            return False, r
-        return "NameSpaceType" in self.user_realm.keys() and self.user_realm.get("NameSpaceType") in ["Unknown", "Managed"], r
-
-    def get_error(self, error):
-        return AadError.from_str(error)
+        return self.user_realm is not None and \
+               "NameSpaceType" in self.user_realm.keys() and \
+               self.user_realm.get("NameSpaceType") in ["Unknown", "Managed"], None
 
     def login(self, username, password) -> tuple:
         data = {
-            "client_id": str(uuid.uuid4()),
+            "client_id": random.choice(self.client_ids),
             "grant_type": "password",
             "resource": "https://graph.windows.net",
             "scope": "openid",
@@ -75,19 +51,19 @@ class MsgraphEnumerator(VpnEnumerator):
         }
         ua = self.session.headers.get("User-Agent")
         self.session.headers["User-Agent"] = "Windows-AzureAD-Authentication-Provider/1.0"
-        res = self.session.post(self.auth_url, data=data)
+        res = self.session.post(self.target + "/common/oauth2/token", data=data)
         self.session.headers["User-Agent"] = ua
         auth_data = res.json()
         err = None
         if "access_token" in auth_data.keys():
             return True, res
         if "error_description" in auth_data.keys():
-            err = self.get_error(auth_data["error_description"])
+            err = AadError.from_str(auth_data["error_description"])
         if err == AadError.MFA_NEEDED:
-            error(f"{username} need MFA", indent=2)
+            error(f"{username} need MFA")
             return True, res
         elif err == AadError.LOCKED:
-            error(f"{username} is locked", indent=2)
+            error(f"{username} is locked")
             return True, res
         return False, res
 

@@ -1,14 +1,10 @@
 import os
 
-import requests
 from imapclient import imapclient
-from requests_ntlm import HttpNtlmAuth
 
-from enumerators.enumerator import VpnEnumerator
-from bs4 import BeautifulSoup
+from enumerators.interfaces.enumerator import VpnEnumerator
 
-from utils.ntlmdecoder import ntlmdecode
-from utils.utils import time_label, logfile, get_project_root, debug
+from utils.utils import logfile, get_project_root, debug
 
 
 # Disclaimer
@@ -19,17 +15,10 @@ from utils.utils import time_label, logfile, get_project_root, debug
 class ImapEnumerator(VpnEnumerator):
     def __init__(self, target, group=None):
         super().__init__()
-        if self.debug:
-            debug(f"{self.__class__.__name__}: Initializing")
-
-        self.target = target
+        self.urls = [f"{target.strip()}"]
 
     def setup(self, **kwargs):
         pass
-
-    def logfile(self) -> str:
-        fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
 
     def validate(self) -> tuple:
         if self.target.find(":") > -1:

@@ -16,17 +16,13 @@ from utils.utils import logfile, get_project_root, SimpleUTC, error, debug, res_
 # https://github.com/byt3bl33d3r/SprayingToolkit/blob/master/core/sprayers/lynk.py
 # CREDIT: @byt3bl33d3r
 
-class LyncEnumerator(VpnEnumerator):
+class LyncdiscoverEnumerator(VpnEnumerator):
     def __init__(self, target, group=None):
         super().__init__()
         self.urls = [f"{target.strip()}"]
 
+    def validate(self) -> tuple:
+        return self.nuclei.run()
+
     def login(self, username, password) -> tuple:
-        url = self.target + "/WebTicket/oauthtoken"
-        data = {
-            "grant_type": "password",
-            "username": username,
-            "password": password
-        }
-        res = self.session.post(url, data=data)
-        return "access_token" in res.json().keys(), res
+        return False, None
