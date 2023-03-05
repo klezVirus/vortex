@@ -1,13 +1,59 @@
 #!/usr/bin/env python
+import re
 import sys
 import os.path
 
-from utils.utils import info
+from nameparser import HumanName
 
 
 class NameMasher:
     def __init__(self, fmt=None):
         self.fmt = fmt
+
+    @staticmethod
+    def clean_name(name2clean):
+        """
+        Taken directly from https://github.com/initstring/linkedin2username/blob/master/linkedin2username.py
+        Why? Cause it works and I like it. Thanks, initstring!
+
+        Removes common punctuation.
+        LinkedIn's users tend to add credentials to their names to look special.
+        This function is based on what I have seen in large searches, and attempts
+        to remove them.
+        """
+        # Lower-case everything to make it easier to de-duplicate.
+        name2clean = name2clean.lower()
+
+        # Use case for tool is mostly standard English, try to standardize common non-English
+        # characters.
+        name2clean = re.sub(r"[àáâãäå]", 'a', name2clean)
+        name2clean = re.sub(r"[èéêë]", 'e', name2clean)
+        name2clean = re.sub(r"[ìíîï]", 'i', name2clean)
+        name2clean = re.sub(r"[òóôõö]", 'o', name2clean)
+        name2clean = re.sub(r"[ùúûü]", 'u', name2clean)
+        name2clean = re.sub(r"[ýÿ]", 'y', name2clean)
+        name2clean = re.sub(r"[ß]", 'ss', name2clean)
+        name2clean = re.sub(r"[ñ]", 'n', name2clean)
+
+        # Get rid of all things in parenthesis. Lots of people put various credentials, etc
+        name2clean = re.sub(r'\([^()]*\)', '', name2clean)
+
+        # The lines below basically trash anything weird left over.
+        # A lot of users have funny things in their names, like () or ''
+        # People like to feel special, I guess.
+        allowed_chars = re.compile('[^a-zA-Z -]')
+        name2clean = allowed_chars.sub('', name2clean)
+
+        # Next, we get rid of common titles. Thanks ChatGPT for the help.
+        titles = ['mr', 'miss', 'mrs', 'phd', 'prof', 'professor', 'md', 'dr', 'mba']
+        pattern = "\\b(" + "|".join(titles) + ")\\b"
+        name2clean = re.sub(pattern, '', name2clean)
+
+        # The line below tries to consolidate white space between words
+        # and get rid of leading/trailing spaces.
+        name2clean = re.sub(r'\s+', ' ', name2clean).strip()
+
+        return name2clean
 
     def select_format(self):
         first = "first"
@@ -38,8 +84,8 @@ class NameMasher:
             "{1}"
             "{1}[{2}]"
         ]
-        info("Select a format for usernames")
-        info("  - 0: first name; 1: second name [optional]; 2: last name")
+        print("Select a format for usernames")
+        print("  - 0: first name; 1: second name [optional]; 2: last name")
         for i, c in enumerate(combinations, start=0):
             print(f"  {i}: " + c.format(first, second, last))
 
@@ -54,22 +100,31 @@ class NameMasher:
         return self.fmt
 
     def handle_name(self, full_name):
-        name = ''.join([c for c in full_name if c == " " or c.isalpha()])
-        tokens = name.lower().split()
+        _name = NameMasher.clean_name(full_name)
+        _name = ''.join([c for c in _name if c == " " or c.isalpha()])
+        _tokens = _name.lower().split()
 
         # skip empty lines
-        if len(tokens) < 1:
+        if len(_tokens) < 1:
             return None
 
-        first_name = tokens[0].strip()
-        last_name = tokens[-1].strip()
+        first_name = _tokens[0].strip()
+        last_name = _tokens[-1].strip()
         second_name = None
-        if len(tokens) > 2:
-            second_name = "".join(tokens[1:-1])
+        if len(_tokens) > 2:
+            second_name = "".join(_tokens[1:-1])
 
         if first_name == "linkedin":
             return None
         return self.mash(first_name, last_name, second_name=second_name)
+
+    def handle_with_human_name_parser(self, noise):
+        if noise.find("linkedin") != -1:
+            return None
+        _name = NameMasher.clean_name(noise)
+        _name = ''.join([c for c in _name if c == " " or c.isalpha()])
+        _name = HumanName(_name)
+        return self.mash(_name.first, _name.last, second_name=_name.middle)
 
     def mash(self, first_name, last_name, second_name=None):
         first_name = ''.join([c for c in first_name if c == " " or c.isalpha()])
@@ -90,9 +145,9 @@ class NameMasher:
         if not self.fmt:
             self.select_format()
         for _line in name_list:
-            name = self.handle_name(_line)
-            if name:
-                ret.append(name)
+            _name = self.handle_name(_line)
+            if _name:
+                ret.append(_name)
         return ret
 
 
