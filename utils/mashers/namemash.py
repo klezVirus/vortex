@@ -50,7 +50,26 @@ class NameMasher:
                 exit(1)
             except ValueError:
                 continue
-        self.fmt = combinations[choice]
+        self.fmt = combinations[choice].replace("[", "").replace("]", "")
+        return self.fmt
+
+    def handle_name(self, full_name):
+        name = ''.join([c for c in full_name if c == " " or c.isalpha()])
+        tokens = name.lower().split()
+
+        # skip empty lines
+        if len(tokens) < 1:
+            return None
+
+        first_name = tokens[0].strip()
+        last_name = tokens[-1].strip()
+        second_name = None
+        if len(tokens) > 2:
+            second_name = "".join(tokens[1:-1])
+
+        if first_name == "linkedin":
+            return None
+        return self.mash(first_name, last_name, second_name=second_name)
 
     def mash(self, first_name, last_name, second_name=None):
         first_name = ''.join([c for c in first_name if c == " " or c.isalpha()])
@@ -61,27 +80,19 @@ class NameMasher:
             second_name = ""
         if not self.fmt:
             self.select_format()
-        return self.fmt.format(first_name, second_name, last_name)
+        result = self.fmt.format(first_name, second_name, last_name)
+        # Fix double dots
+        result = result.replace("..", ".")
+        return result
 
     def mash_list(self, name_list: list) -> list:
         ret = []
         if not self.fmt:
             self.select_format()
         for _line in name_list:
-            name = ''.join([c for c in _line if c == " " or c.isalpha()])
-            tokens = name.lower().split()
-
-            # skip empty lines
-            if len(tokens) < 1:
-                continue
-
-            first_name = tokens[0].strip()
-            last_name = tokens[-1].strip()
-
-            if first_name == "linkedin":
-                continue
-
-            ret.append(self.fmt.format(first_name, last_name))
+            name = self.handle_name(_line)
+            if name:
+                ret.append(name)
         return ret
 
 

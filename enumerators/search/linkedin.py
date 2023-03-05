@@ -72,62 +72,6 @@ class Network:
     SECOND = "S"
     THIRD = "O"
 
-
-class Employee:
-    HEADERS = ["Name", "Role", "Location", "Summary"]
-
-    def __init__(self, name, role, location, text):
-        self.name = name
-        self.role = role
-        self.location = location
-        self.text = text
-
-    def to_csv(self):
-        return f"\"{self.name}\",\"{self.role}\",\"{self.location}\",\"{self.text}\""
-
-
-class EmployeeList:
-    def __init__(self):
-        self.employee_list = []
-        self.mode = "w"
-
-    # adding two objects
-    def __add__(self, o):
-        if not hasattr(o, "employee_list"):
-            return
-        self.employee_list += o.employee_list
-        return self
-
-    def __len__(self):
-        return len(self.employee_list)
-
-    @property
-    def count(self):
-        return len(self.employee_list)
-
-    def append(self, employee: Employee):
-        self.employee_list.append(employee)
-
-    def to_csv(self):
-        return "\n".join([employee.to_csv() for employee in self.employee_list])
-
-    def save_csv(self, filename, reset=True):
-        """
-        This function saves the list using the following algorithm
-        1st call: Writes header and overwrite the file
-        2nd+ calls: Writes in append mode
-        Every call to this function flushes the list of employees
-        """
-        if self.mode == "w":
-            with open(filename, self.mode, encoding="latin-1", errors="replace") as save:
-                save.write(",".join(Employee.HEADERS) + "\n")
-        self.mode = "a"
-        with open(filename, self.mode, encoding="latin-1", errors="replace") as save:
-            save.write(self.to_csv())
-        if reset:
-            self.employee_list = []
-
-
 class LinedInFactory:
     @staticmethod
     def from_config(file):
@@ -144,16 +88,12 @@ class LinedInFactory:
         session_restored = False
 
         if session and os.path.isfile(session):
-            info("Session file found. Do you want to restore it?", indent=2)
-            choice = "x"
-            while choice.lower() not in ["y", "n"]:
-                choice = input("  [y|n] > ")
-            if choice.lower() == "y":
-                try:
-                    collector = LinkedIn.from_session(session)
-                    session_restored = True
-                except LinkedInInvalidSessionFileError:
-                    error("The session file was invalid", indent=2)
+            info("Session file found. Check for validity...", indent=2)
+            try:
+                collector = LinkedIn.from_session(session)
+                session_restored = True
+            except LinkedInInvalidSessionFileError:
+                error("The session file was invalid", indent=2)
 
         if username and password and not session_restored:
             collector = LinkedIn(username=username, password=password)
@@ -238,7 +178,9 @@ class LinkedIn:
                 data = pickle.load(session)
             collector = LinkedIn(data["username"], data["password"])
             collector.session = data["session"]
-            return collector
+            if collector.validate_session():
+                return collector
+            raise LinkedInInvalidSessionFileError
         except:
             raise LinkedInInvalidSessionFileError
 
@@ -273,7 +215,7 @@ class LinkedIn:
         }
         return values
 
-    def login(self):
+    def login(self, otp=None):
         url = "https://www.linkedin.com/checkpoint/lg/login-submit"
         data = self.login_prefetch()
 
@@ -289,7 +231,7 @@ class LinkedIn:
                 return True
             else:
                 # Need to verify device
-                return self.mfa_submit(res)
+                return self.mfa_submit(res, otp=otp)
         return False
 
     @staticmethod
@@ -317,13 +259,16 @@ class LinkedIn:
         }
         return values
 
-    def mfa_submit(self, res):
+    def mfa_submit(self, res, otp=None):
         url = "https://www.linkedin.com:443/checkpoint/challenge/verify"
 
         data = LinkedIn.__mfa_prefetch(res)
-        print("[*] Need to verify your device, provide your OTP")
-        pin = input("    $> ")
-        data["pin"] = pin
+        if not otp:
+            print("[*] Need to verify your device, provide your OTP")
+            pin = input("    $> ")
+            data["pin"] = pin
+        else:
+            data["pin"] = otp
         res = self.session.post(url, data=data)
         return any(
             ["Location" in r.headers.keys() and r.headers["Location"].startswith("https://www.linkedin.com/feed/") for r
@@ -389,9 +334,11 @@ class LinkedIn:
             else:
                 self.employees.append(employee)
 
-    def __collect_employees_on_page(self, company_name, page_id):
+    def __collect_employees_on_page(self, company_name, page_id, _filter=None):
+        if not _filter:
+            _filter = company_name
         self.__current_page = page_id
-        filter_string = f"&company={company_name}&keywords={company_name}"
+        filter_string = f"&company={company_name}&keywords={_filter}"
         if self.filter:
             filter_string += self.filter.to_string()
         url = f"https://www.linkedin.com/search/results/people/?{filter_string}&origin=CLUSTER_EXPANSION&page={page_id}&sid=%40dk"
@@ -400,8 +347,10 @@ class LinkedIn:
             return
         self.__extract_employees(data, company_name)
 
-    def __fetch_results_count(self, company_name):
-        filter_string = f"&company={company_name}&keywords={company_name}"
+    def __fetch_results_count(self, company_name, _filter=None):
+        if not _filter:
+            _filter = company_name
+        filter_string = f"&company={company_name}&keywords={_filter}"
         if self.filter:
             filter_string += self.filter.to_string()
         url = f"https://www.linkedin.com/search/results/people/?{filter_string}&origin=CLUSTER_EXPANSION&sid=%40dk"
@@ -410,29 +359,34 @@ class LinkedIn:
             raise LinkedInFetchError
         return int(data["data"]["metadata"]["totalResultCount"])
 
-    def stealth_collect_employees(self, company_name, autosave=False):
-        count = self.__fetch_results_count(company_name)
+    def stealth_collect_employees(self, company_name, _filter=None, autosave=False):
+        count = self.__fetch_results_count(company_name, _filter=_filter)
         progress(f"Number of people caught by the query: {count}", indent=4)
-        progress(f"Current limit: 1000", indent=4)
         count = min(1000, count)
-        for page in tqdm(range(1, (count // 10) + 2)):
-            self.__collect_employees_on_page(company_name, page)
+        if count > 1:
+            progress(f"Current limit: 1000", indent=4)
+            for page in tqdm(range(1, (count // 10) + 2)):
+                self.__collect_employees_on_page(company_name, page, _filter=_filter)
+                self.__wait()
+            if self.employees.count > 100 and autosave:
+                self.employees.save_csv("employees.csv")
+            if self.past_employees.count > 100 and autosave:
+                self.employees.save_csv("past_employees.csv")
+        else:
+            progress(f"Fetching single page result", indent=4)
+            self.__collect_employees_on_page(company_name, 1, _filter=_filter)
             self.__wait()
-        if self.employees.count > 100 and autosave:
-            self.employees.save_csv("employees.csv")
-        if self.past_employees.count > 100 and autosave:
-            self.employees.save_csv("past_employees.csv")
 
     def __wait(self):
         if not self.checkpoint:
             wait = 1.0 + random.uniform(0.5, 5.0)
             time.sleep(wait)
         else:
-            progress("Checkpoint reached: press Ctrl+C to exit or Enter to continue", indent=2)
-            input()
+            progress("Checkpoint reached... waiting 1 minute before restarting", indent=2)
+            time.sleep(60)
 
     @staticmethod
-    def execute_routine(target, config, location, reset=False):
+    def execute_routine(target, config, location, _filter=None, otp=None, reset=False):
         collector = None
         if not config or not os.path.isfile(config):
             error("The configuration file was not found", indent=2)
@@ -447,10 +401,15 @@ class LinkedIn:
                 collector.validate_session()
             except LinkedInSessionExpired:
                 info("Logging in", indent=2)
-                collector.login()
+                collector.login(otp=otp)
                 time.sleep(2)
             info("Collecting employees data", indent=2)
-            collector.stealth_collect_employees(company_name=target, autosave=reset)
+            if isinstance(_filter, str):
+                _filter = [x.strip() for x in _filter.split(",")]
+
+            for _f in _filter:
+                collector.stealth_collect_employees(company_name=target, _filter=_f, autosave=reset)
+
         except KeyboardInterrupt:
             error("Aborted by user", indent=2)
         except LinkedInFetchError as e:

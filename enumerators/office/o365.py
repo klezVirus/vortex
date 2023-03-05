@@ -1,28 +1,19 @@
-import json
 import os
 import uuid
 
-import requests
-from requests_ntlm import HttpNtlmAuth
-
-from db.dao.domain import DomainDao
 from db.enums.errors import AadError
-from enumerators.enumerator import VpnEnumerator
-from bs4 import BeautifulSoup
+from enumerators.interfaces.enumerator import VpnEnumerator
 
-from utils.ntlmdecoder import ntlmdecode
-from utils.utils import time_label, logfile, get_project_root, random_ascii_string, error, is_subdomain, extract_domain, \
+from utils.utils import logfile, get_project_root, error, is_subdomain, extract_domain, \
     debug
 
 # Disclaimer
 # The code for the OWA enumerator has been copied and adapted from SprayingToolkit
 # https://github.com/byt3bl33d3r/SprayingToolkit/blob/master/core/sprayers/owa.py
 # CREDIT: @byt3bl33d3r
-from validators.o365creeper import O365Creeper
-from validators.o365enum import O365Enum
 
 
-class O365Enumerator(VpnEnumerator):
+class MsgraphEnumerator(VpnEnumerator):
     def __init__(self, target, group=None):
         super().__init__()
         if self.debug:
