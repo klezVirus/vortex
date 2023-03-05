@@ -1,34 +1,9 @@
-import argparse
-import argparse
-import contextlib
-import hashlib
-import math
-import pickle
-import re
 import sqlite3
-import tempfile
-import time
+import sqlite3 as sql
 import traceback
-import sys
-import os
-from abc import ABC, abstractmethod
-from datetime import datetime
-from enum import Enum
-from pathlib import Path
 from sqlite3 import Connection, Cursor
 
-import pandas as pd
-import requests
-
-from bs4 import BeautifulSoup
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
-import sqlite3 as sql
-import urllib.parse
-from joblib import Parallel, delayed
-import multiprocessing
-
-from db.models.user import User
-from utils.utils import get_project_root
+from utils.utils import get_project_root, generate_string
 
 
 class DBCursor:
@@ -128,8 +103,8 @@ class DBHandler:
         return fmt
 
     def set_email_format(self, mail_format):
-        sql = "INSERT OR REPLACE INTO config(cid, email_format) values (?, ?)"
-        args = (1, mail_format)
+        sql = "INSERT OR REPLACE INTO config(cid, email_format, aws_prefix) values (?, ?, ?)"
+        args = (1, mail_format, generate_string(5))
         with self.create_cursor() as cursor:
             cursor.execute(sql, args)
 

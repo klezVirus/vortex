@@ -15,6 +15,11 @@ class ExtendedEnum(Enum):
         return _types[name] if name in _types.keys() else None
 
     @classmethod
+    def from_value(cls, value):
+        _types = dict(map(lambda c: (c.value, c), cls))
+        return _types[value] if value in _types.keys() else None
+
+    @classmethod
     def value_list(cls):
         return list(map(lambda c: c.value, cls))
 

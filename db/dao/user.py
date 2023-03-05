@@ -1,15 +1,25 @@
 from db.dao.leak import LeakDao
 from db.dao.profile import ProfileDao
 from db.handler import DBHandler
+from db.interfaces.dao import Dao
 from db.models.profile import Profile
 from db.models.endpoint import Endpoint
 from db.models.user import User
-from utils.utils import progress
+from utils.utils import progress, error
 
 
-class UserDao:
+class UserDao(Dao):
     def __init__(self, handler: DBHandler):
-        self.dbh = handler
+        super().__init__(handler, "users")
+
+    def dao_create_object(self, data):
+        return User(
+                    uid=data[0],
+                    name=data[1],
+                    email=data[2],
+                    role=data[3],
+                    valid=data[4]
+                )
 
     def list_all(self):
         users = []
@@ -18,14 +28,7 @@ class UserDao:
             cursor.execute(sql)
             for data in cursor:
                 uid = data[0]
-                user = User(
-                    uid=uid,
-                    name=data[1],
-                    username=data[2],
-                    email=data[3],
-                    role=data[4],
-                    valid=data[5]
-                )
+                user = self.dao_create_object(data)
                 leaks = []
                 sql = "SELECT password FROM leaks where uid = ?"
                 args = (uid, )
@@ -50,29 +53,22 @@ class UserDao:
                 users.append(user)
         return users
 
+    def exists(self, email):
+        sql = "SELECT * from users where email = ?"
+        args = (email, )
+        users = self.dao_collect(sql, args)
+        return len(users) > 0
+
     def find_by_username(self, username):
         sql = "SELECT * from users where email = ?"
         args = (username, )
-        cursor = self.dbh.execute(sql, args)
-        try:
-            data = cursor.fetchone()
-            return User(
-                uid=data[0],
-                name=data[1],
-                username=data[2],
-                email=data[3],
-                role=data[4],
-                valid=data[5]
-            )
-        except (IndexError, TypeError):
-            # The user doesn't exists
-            return None
+        users = self.dao_collect(sql, args)
+        return users[0] if len(users) > 0 else None
 
     def delete(self, user: User):
         sql = "DELETE FROM users where uid = ?"
         args = (user.uid,)
-        with self.dbh.create_cursor() as cursor:
-            cursor.execute(sql, args)
+        self.dao_execute(sql, args)
 
     def set_valid(self, user: User):
         # Finally, update the DB user
@@ -86,14 +82,14 @@ class UserDao:
         # First, check if the user exists
         db_user = self.find_by_username(user.email)
         if not db_user:
-            sql = "INSERT OR IGNORE INTO users (name, username, email, job) VALUES (?, ?, ?, ?)"
-            args = (user.name, user.username, user.email, user.role)
+            sql = "INSERT OR IGNORE INTO users (name, email, job) VALUES (?, ?, ?)"
+            args = (user.name, user.email, user.role)
             with self.dbh.create_cursor() as cursor:
                 cursor.execute(sql, args)
             # Now, we can fetch the User
             db_user = self.find_by_username(user.email)
         else:
-            progress(f"{db_user.email} already in the DB", indent=2)
+            error(f"{db_user.email} already in the DB")
         # Eventually, we merge the users
         db_user.update(user)
 
@@ -112,14 +108,13 @@ class UserDao:
         # Finally, update the DB user
         sql = r"""UPDATE users 
         SET name = ?,
-            username = ?,
             email = ?,
             job = ?,
             valid = ?
         WHERE
             uid = ?
         """
-        args = (db_user.name, db_user.username, db_user.email, db_user.role, db_user.uid, db_user.valid)
+        args = (db_user.name, db_user.email, db_user.role, db_user.uid, db_user.valid)
         with self.dbh.create_cursor() as cursor:
             cursor.execute(sql, args)
         return db_user.uid

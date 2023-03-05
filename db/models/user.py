@@ -2,11 +2,10 @@ from db.models.model import Model
 
 
 class User(Model):
-    def __init__(self, uid, name, username, email, role, valid: bool = False):
+    def __init__(self, uid, name, email, role, valid: bool = False):
         super().__init__()
         self.uid = uid
         self.name = name
-        self.username = username
         self.email = email
         self.role = role
         self.valid = valid
@@ -16,8 +15,6 @@ class User(Model):
     def update(self, user):
         if self.name in [None, ""]:
             self.name = user.name
-        if self.username in [None, ""]:
-            self.username = user.username
         if self.role in [None, ""]:
             self.role = user.role
         if self.valid in [False]:

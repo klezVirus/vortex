@@ -1,89 +1,55 @@
+from typing import Union
+
+from db.interfaces.dao import Dao
 from db.handler import DBHandler
-from db.models.etype import Etype
-from db.models.profile import Profile
 from db.models.endpoint import Endpoint
 
 
-class EndpointDao:
+class EndpointDao(Dao):
     def __init__(self, handler: DBHandler):
-        self.dbh = handler
+        super().__init__(handler, "endpoints")
 
-    def list_all(self):
-        endpoints = []
-        sql = "SELECT * FROM endpoints"
-        with self.dbh.create_cursor() as cursor:
-            cursor.execute(sql)
-            for data in cursor:
-                endpoint = Endpoint(
-                    eid=data[0],
-                    target=data[1],
-                    email_format=data[2],
-                    etype_ref=data[3],
-                    additional_info=data[4]
-                )
-                endpoints.append(endpoint)
-        return endpoints
+    def dao_create_object(self, data):
+        return Endpoint(
+            eid=data[0],
+            target=data[1],
+            email_format=data[2],
+            etype_ref=data[3],
+            additional_info=data[4]
+        )
 
     def delete(self, endpoint: Endpoint):
         sql = "DELETE FROM endpoints where eid = ?"
         args = (endpoint.eid,)
-        with self.dbh.create_cursor() as cursor:
-            cursor.execute(sql, args)
+        self.dao_execute(sql, args)
 
     def find_by_name_like(self, name):
         name = f"%{name}%"
         sql = "SELECT * FROM endpoints where target LIKE ?"
         args = (name,)
-        ds = []
-        with self.dbh.create_cursor() as cursor:
-            cursor.execute(sql, args)
-            for data in cursor:
-                d = Endpoint(
-                    eid=data[0],
-                    target=data[1],
-                    email_format=data[2],
-                    etype_ref=data[3],
-                    additional_info=data[4]
-                )
-                ds.append(d)
-        return ds
+        return self.dao_collect(sql, args)
 
     def find_by_name_and_type(self, name, etype):
         sql = "SELECT * FROM endpoints where target = ? and etype_ref = ?"
         args = (name, etype,)
-        result = []
-        with self.dbh.create_cursor() as cursor:
-            cursor.execute(sql, args)
-            for data in cursor:
-                r = Endpoint(
-                    eid=data[0],
-                    target=data[1],
-                    email_format=data[2],
-                    etype_ref=data[3],
-                    additional_info=data[4]
-                )
-                result.append(r)
-        return len(result) > 0
+        return self.dao_collect(sql, args)
+
+    def get_email_format(self, origin):
+        sql = "SELECT * FROM endpoints where target = ?"
+        args = (origin,)
+        result = self.dao_collect(sql, args)
+        return result[0].email_format if len(result) > 0 else None
 
     def find_where_text(self, text):
         text = f"%{text}%"
         sql = "SELECT * FROM endpoints where additional_info LIKE ?"
         args = (text,)
-        result = []
-        with self.dbh.create_cursor() as cursor:
-            cursor.execute(sql, args)
-            for data in cursor:
-                r = Endpoint(
-                    eid=data[0],
-                    target=data[1],
-                    email_format=data[2],
-                    etype_ref=data[3],
-                    additional_info=data[4]
-                )
-                result.append(r)
+        result = self.dao_collect(sql, args)
         return result[0] if len(result) > 0 else None
 
-    def exists_categorised(self, name):
+    def exists_categorised(self, name: Union[Endpoint, str]):
+        if isinstance(name, Endpoint):
+            name = name.target
         e = self.find_by_name(name)
         return e is not None and e.etype_ref != 1
 
@@ -93,18 +59,7 @@ class EndpointDao:
     def find_by_name(self, name):
         sql = "SELECT * FROM endpoints where target = ?"
         args = (name,)
-        result = []
-        with self.dbh.create_cursor() as cursor:
-            cursor.execute(sql, args)
-            for data in cursor:
-                r = Endpoint(
-                    eid=data[0],
-                    target=data[1],
-                    email_format=data[2],
-                    etype_ref=data[3],
-                    additional_info=data[4]
-                )
-                result.append(r)
+        result = self.dao_collect(sql, args)
         return result[0] if len(result) > 0 else None
 
     def update(self, endpoint: Endpoint):
@@ -132,6 +87,5 @@ class EndpointDao:
             return
         sql = "INSERT OR IGNORE INTO endpoints (target, email_format, etype_ref, additional_info) VALUES (?, ?, ?, ?)"
         args = (endpoint.target, endpoint.email_format, endpoint.etype_ref, endpoint.additional_info_str)
-        print(args)
         with self.dbh.create_cursor() as cursor:
             cursor.execute(sql, args)

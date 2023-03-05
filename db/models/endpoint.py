@@ -4,7 +4,7 @@ from db.models.model import Model
 
 
 class Endpoint(Model):
-    def __init__(self, eid, target, email_format, etype_ref:int, additional_info=None):
+    def __init__(self, eid, target, email_format, etype_ref: int, additional_info=None):
         super().__init__()
         self.eid = eid
         self.target = target
