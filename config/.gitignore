@@ -1,4 +1,5 @@
 config-priv.ini
 api.ini
+aws.config
 !owa_endpoints.txt
 !etypes.csv
