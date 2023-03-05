@@ -226,11 +226,25 @@ def ntlmdecode(authenticate_header):
     ver_tup = struct.unpack("<i", st[8:12])
     ver = ver_tup[0]
 
-    #print("Msg Type: %d (%s)" % (ver, msg_types[ver]))
-
-    #if ver == 1:
-        #pretty_print_request(st)
-
     return pretty_print_challenge(st)
 
-    raise Exception(f"Unknown message structure.  Have a raw (hex-encoded) message: {hexlify(st)}")
+    # raise Exception(f"Unknown message structure.  Have a raw (hex-encoded) message: {hexlify(st)}")
+
+
+def extract_owa_domain(www_auth):
+    ntlm_info, netbios_domain = None, None
+    if www_auth:
+        try:
+            ntlm_info = ntlmdecode(www_auth)
+        except Exception as e:
+            print(f"Error while decoding NTLM challenge: {e}")
+    if ntlm_info:
+        netbios_domain = ntlm_info.get(
+            'DNS_Domain_name',
+            ntlm_info.get(
+                'DNS_Tree_Name',
+                ntlm_info.get('NetBIOS_Domain_Name', '')
+            )
+        )
+    return netbios_domain
+
