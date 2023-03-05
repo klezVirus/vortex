@@ -1,99 +1,174 @@
+import re
+import threading
+import time
 import traceback
 
 from actions.action import Action
-from db.dao.endpoint import EndpointDao
-from db.dao.etype import EtypeDao
-from db.dao.login import LoginDao
-from db.dao.user import UserDao
 from db.enums.types import EndpointType
-from enumerators.factories import VpnEnumeratorFactory
+from enumerators.factories import VpnEnumeratorFactory, OfficeEnumeratorFactory
 
-from db.models.user import User
-from utils.utils import success, error, info, progress
-from validators.o365creeper import O365Creeper
+from enumerators.parallel import DetectWorker
+from utils.utils import success, error, info, progress, create_additional_info, debug, highlight
+from validators.validator import Validator
 
 
 class Validate(Action):
     def __init__(self, workspace):
         super().__init__(workspace)
-        self.commands = ["users", "endpoints"]
+        self.commands = {
+            "vpn": [""],
+            "office": [""],
+            "users": ["tech", "domain"]
+        }
 
     def execute(self, **kwargs):
-        self.dbh.connect()
-        u_dao = UserDao(handler=self.dbh)
-        e_dao = EndpointDao(handler=self.dbh)
-        s_dao = LoginDao(handler=self.dbh)
-
+        domain = kwargs["domain"]
         command = kwargs["command"]
-        if not command or command not in self.commands:
-            command = self.choose_command()
+        _filter = kwargs["filter"]
+        validator_name = kwargs["tech"]
+        use_aws = kwargs.get("aws", False)
 
-        # Get all registered endpoints
-        endpoints = e_dao.list_all()
+        if not _filter:
+            _filter = re.compile(r".*")
+        else:
+            _filter = re.compile(_filter)
+        # DB Routines
+        oracle = self.dbms.create_empty_oracle(domain)
+        if not oracle:
+            error(f"Domain {highlight(domain)} does not exist.")
+            info(f"Please run a subscan first.")
+            return
+
         # Get all registered users
-        users = u_dao.list_all()
+        users = self.dbms.db_users()
 
         # Keep trace of invalid objects
         invalid = []
-        valid = []
 
+        start = time.time()
+        validator = None
         if command == "users":
-            validator = O365Creeper()
-            for u in users:
-                kwargs = {"email": u.email}
-                try:
-                    if validator.execute(**kwargs):
-                        success(f"{u.email} is a valid O365 account!")
-                        valid.append(u)
-                    else:
-                        error(f"{u.email} is not a valid O365 account.")
-                        invalid.append(u)
-                except KeyboardInterrupt:
-                    exit(1)
-                except Exception as e:
-                    traceback.print_exc()
-                    error(f"Exception: {e}")
-                    continue
+            try:
+                validator = Validator.from_name(validator_name)
+                oracle["aws"] = kwargs["aws"]
+                oracle["dbh"] = self.dbh
+                validator.setup(**oracle)
+                valid, invalid = self.parallel_user_validate(users=[u.email for u in users], validator=validator)
+            except:
+                error(f"Failed to validate users with {highlight(validator_name)}")
+        elif command in ["vpn", "office"]:
+            # We want to validate all origins that were not categorized yet
+            origins = [x for x in self.dbms.db_origins(as_urls=True) if _filter.search(x)]
 
-        if command == "endpoints":
-            et_dao = EtypeDao(self.dbh)
-            for endpoint in endpoints:
-                vpn_type = et_dao.find_by_id(endpoint.etype_ref)
-                vpn_name = vpn_type.name
-                enumerator = VpnEnumeratorFactory.from_name(vpn_name, endpoint.target, group="dummy")
-                try:
-                    result, res = enumerator.validate()
-                    if result:
-                        success(f"{endpoint.target} is a {vpn_name} target!")
-                    else:
-                        error(f"{endpoint.target} is not a {vpn_name} target!")
-                        invalid.append(endpoint)
-                except KeyboardInterrupt:
-                    exit(1)
-                except Exception as e:
-                    error(f"Exception: {e}")
-                    continue
+            if len(origins) == 0:
+                error("No uncategorized origin found.")
+                return
+            try:
+                if command == "vpn":
+                    info(f"Trying to detect hosts with VPN web-login")
+                    self.parallel_validate(domains=origins, **oracle)
+                    progress(f"Found {len(self.endpoints)} hosts with a VPN web login")
+
+                else:
+                    info(f"Trying to detect hosts with MS on premise web-login")
+                    self.parallel_validate_office(domains=origins, **oracle)
+                    progress(f"Found {len(self.endpoints)} hosts with a MS on-premise web login")
+
+                info("Updating endpoints in the database...")
+                self.dbms.save_endpoints(self.endpoints)
+
+                debug(f"Elapsed time: {time.time() - start}")
+            except KeyboardInterrupt:
+                exit(1)
+            except Exception as e:
+                error(f"Exception: {e}")
+
+        if use_aws and validator:
+            info("AWS Manager: Destroying APIs...")
+            validator.aws_manager.clear_all_apis_in_session()
 
         if len(invalid) == 0:
             exit(1)
         else:
-            info(f"Found {len(invalid)} invalid objects. Delete?")
-            choice = self.wait_for_choice()
-            if not choice:
+            info(f"Found {len(invalid)} invalid objects. If you'd like to delete them, specify `--delete`")
+            if not kwargs.get("delete"):
                 exit(1)
-            try:
-                dao = u_dao if isinstance(invalid[0], User) else e_dao
-                for obj in invalid:
-                    progress(f"Deleting {obj.__class__.__name__}: {obj.to_string()}")
-                    dao.delete(obj)
-            except Exception as e:
-                error(f"Exception: {e}")
-            try:
-                if isinstance(valid[0], User):
-                    dao = u_dao
+            self.dbms.delete_invalid_objects(invalid)
 
-                    for obj in valid:
-                        progress(f"Deleting {obj.__class__.__name__}: {obj.to_string()}")
-                        dao.set_valid(obj)
-            except Exception as e:
-                error(f"Exception: {e}")
+    def parallel_user_validate(self, users, validator, **kwargs):
+        validator.setup(**kwargs)
+        validator.parallel_validate(users)
+        return validator.found, [u for u in users if u not in validator.found]
+
+    def parallel_validate(self, domains, **kwargs):
+        d = kwargs.get("domain")
+        for i in range(20):
+            thread = DetectWorker()
+            thread.threading_object = self
+            thread.daemon = True
+            thread.start()
+        lock = threading.Lock()
+        for domain in domains:
+            e = kwargs.get("endpoints", {}).get(domain)
+            domain_info = create_additional_info(domain=d, endpoint=e)
+            domain_info["lock"] = lock
+            for vt in self.dbms.db_etypes():
+                vpn_name = vt.name
+                enumerator = VpnEnumeratorFactory.from_name(vpn_name, domain, group="dummy")
+                if not enumerator:
+                    continue
+                enumerator.setup(**domain_info)
+                self.enqueue((enumerator, vt.etid))
+        self.wait_threads()
+
+    def parallel_validate_office(self, domains, **kwargs):
+        d = kwargs.get("domain")
+        for i in range(20):
+            thread = DetectWorker()
+            thread.threading_object = self
+            thread.daemon = True
+            thread.start()
+        for domain in domains:
+            e = kwargs.get("endpoints", {}).get(domain)
+            domain_info = create_additional_info(domain=d, endpoint=e)
+            for vt in self.dbms.db_etypes():
+                vpn_name = vt.name
+                enumerator = OfficeEnumeratorFactory.from_name(vpn_name, domain, group="dummy")
+                if not enumerator:
+                    continue
+                enumerator.setup(**domain_info)
+                self.enqueue((enumerator, vt.etid))
+        self.wait_threads()
+
+    def parallel_validate2(self, domains):
+        threads = []
+        self.lock.acquire()
+        for origin in domains:
+            for vt in EndpointType.value_list():
+                threads.append(threading.Thread(target=self.validate, args=(origin, vt)))
+        for t in threads:
+            t.daemon = True
+            t.start()
+        for t in threads:
+            t.join()
+
+    def validate(self, origin, vpn_type):
+        vpn_name = self.dbms.get_etype_name(vpn_type)
+        enumerator = VpnEnumeratorFactory.from_name(vpn_name, origin, group="dummy")
+        if enumerator is None:
+
+            return False
+        if enumerator is not None and enumerator.safe_validate():
+            self.add_endpoint(origin, vpn_type)
+            return True
+        return False
+
+    def validate_office(self, origin, vpn_type):
+        vpn_name = self.dbms.get_etype_name(vpn_type)
+        enumerator = OfficeEnumeratorFactory.from_name(vpn_name, origin, group="dummy")
+        if enumerator is None:
+            return False
+        if enumerator is not None and enumerator.safe_validate():
+            self.add_endpoint(origin, vpn_type)
+            return True
+        return False

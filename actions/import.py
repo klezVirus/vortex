@@ -6,29 +6,51 @@ import time
 from actions.action import Action
 from db.dao.endpoint import EndpointDao
 from db.dao.user import UserDao
-from db.enums.types import EndpointType
 from db.models.endpoint import Endpoint
 from db.models.leak import Leak
 from db.models.user import User
 from enumerators.factories import VpnEnumeratorFactory
 from enumerators.parallel import DetectWorker
-from utils.namemash import NameMasher
+from utils.mashers.namemash import NameMasher
 from utils.utils import info, error, progress, debug, success
 
 
 class Import(Action):
     def __init__(self, workspace):
         super().__init__(workspace)
-        self.commands = ["blues", "usernames", "emails", "pwndb", "domains", "origins", "full-names"]
+        self.commands = {
+            "blues": ["domain", "import_file"],
+            "usernames": ["domain", "import_file"],
+            "emails": ["import_file"],
+            "pwndb": ["domain", "import_file"],
+            "domains": ["domain", "import_file"],
+            "origins": ["domain", "import_file"],
+            "full-names": ["domain", "import_file"],
+            "help": []
+        }
+        self.no_child_process = True
 
     def execute(self, **kwargs):
         self.dbh.connect()
         command = kwargs["command"]
-        if not command or command not in self.commands:
-            command = self.choose_command()
-
         domain = kwargs["domain"]
         import_file = kwargs["import_file"]
+
+        if command == "help":
+            info("[--------------------------------------------------------------]")
+            print(r""" The import utility allows you to import data from a file into the database.
+ The file needs to be a file with the following format:
+  - Linkedin2Username :     CSV (Name,Role,,)
+  - Usernames         :     TXT (1 Username x line)
+  - Emails            :     TXT (1 Email x line)
+  - Pwndb             :     CSV (email, password, domain, date)          
+            """)
+            info("[--------------------------------------------------------------]")
+            info("Available commands:")
+            for k, v in self.commands.items():
+                info(f"\t{k} {v}")
+            exit(0)
+
         if not (import_file and os.path.isfile(import_file)):
             info("Please provide a file to import")
             import_file = self.wait_for_input()
@@ -39,12 +61,15 @@ class Import(Action):
 
         dao = UserDao(handler=self.dbh)
         e_dao = EndpointDao(handler=self.dbh)
-        db_endpoints = [e.target for e in e_dao.list_all()]
+        db_endpoints = self.dbms.db_endpoints()
 
         if domain is None:
             error("Domain field is required")
             info("Please enter a target domain")
             domain = self.wait_for_input()
+
+        info(f"Importing {command} form {import_file} into {domain}")
+
 
         if command == "blues":
             masher = NameMasher()
@@ -64,7 +89,7 @@ class Import(Action):
                         continue
                     username = masher.mash(name.split(" ")[0], name.split(" ")[-1])
                     email = f"{username}@{domain}"
-                    user = User(uid=0, name=name, username=username, email=email, role=role)
+                    user = User(uid=0, name=name, email=email, role=role)
                     dao.save(user)
         elif command == "full-names":
             masher = NameMasher()
@@ -80,21 +105,22 @@ class Import(Action):
                     row = row.replace("'", "").replace("\n", "")
                     username = masher.mash(row.split(" ")[0], row.split(" ")[-1])
                     email = f"{username}@{domain}"
-                    user = User(uid=0, name=row, username=username, email=email, role="")
+                    user = User(uid=0, name=row, email=email, role="")
                     dao.save(user)
 
         elif command == "usernames":
             with open(import_file) as imports:
                 for username in imports:
                     email = f"{username}@{domain}"
-                    user = User(uid=0, name="", username=username, email=email, role="")
+                    user = User(uid=0, name="", email=email, role="")
                     dao.save(user)
 
         elif command == "emails":
             with open(import_file) as imports:
-                for email in imports:
-                    username = email.split("@")[0]
-                    user = User(uid=0, name="", username=username, email=email, role="")
+                for email in imports.readlines():
+                    email = email.strip()
+                    progress(f"Importing {email} into DB")
+                    user = User(uid=0, name="", email=email, role="")
                     dao.save(user)
 
         elif command == "pwndb":
@@ -111,8 +137,16 @@ class Import(Action):
             for u, leaks in users.items():
                 if not u or u.strip() == "":
                     continue
-                user = User(uid=0, name=None, username=u.split("@")[0], email=u, role=None)
-                user.leaks = [Leak(leak_id=0, password=leak, uid=0) for leak in leaks]
+                user = User(uid=0, name=None, email=u, role=None)
+                user.leaks = [
+                    Leak(leak_id=0,
+                         password=leak,
+                         uid=0,
+                         database="pwndb",
+                         hashed=None,
+                         address=None,
+                         phone=None
+                         ) for leak in leaks]
                 dao.save(user)
 
         elif command == "origins":
@@ -122,21 +156,28 @@ class Import(Action):
                 origins = imports.readlines()
                 info(f"Trying to detect hosts with VPN web-login")
                 self.parallel_validate(domains=origins)
-                progress(f"Found {len(self.endpoints)} hosts with a VPN web login", indent=2)
-                debug(f"Elapsed time: {time.time() - start}", indent=2)
+                progress(f"Found {len(self.endpoints)} hosts with a VPN web login")
+                debug(f"Elapsed time: {time.time() - start}")
                 info(f"Updating DB...")
+
                 for endpoint in self.endpoints:
-                    vpn_name = EndpointType.get_name(endpoint['endpoint_type'])
+                    vpn_name = self.dbms.get_etype_name(endpoint['endpoint_type'])
                     origin = endpoint['endpoint']
                     if origin not in db_endpoints:
-                        success(f"Adding {origin} as a {vpn_name} target", indent=2)
-                        ep = Endpoint(eid=0, target=origin, endpoint_type=endpoint["endpoint_type"])
+                        success(f"Adding {origin} as a {vpn_name} target")
+                        self.dbms.save_endpoint()
+
+                        ep = Endpoint(
+                            eid=0,
+                            target=origin,
+                            etype_ref=endpoint["endpoint_type"]
+                        )
                         e_dao.save(ep)
                     else:
-                        error(f"{origin} already in the DB. Skipping", indent=2)
+                        error(f"{origin} already in the DB. Skipping")
 
     def validate(self, origin, vpn_type):
-        vpn_name = EndpointType.get_name(vpn_type)
+        vpn_name = self.dbms.get_etype_name(vpn_type)
         enumerator = VpnEnumeratorFactory.from_name(vpn_name, origin, group="dummy")
         if enumerator is None:
             return False
@@ -152,19 +193,19 @@ class Import(Action):
             thread.daemon = True
             thread.start()
         for domain in domains:
-            for vt in EndpointType.value_list():
-                vpn_name = EndpointType.get_name(vt)
+            for vt in self.dbms.db_etypes():
+                vpn_name = vt.name
                 enumerator = VpnEnumeratorFactory.from_name(vpn_name, domain, group="dummy")
                 if not enumerator:
                     continue
-                self.enqueue((enumerator, vt))
+                self.enqueue((enumerator, vt.etid))
         self.wait_threads()
 
     def parallel_validate2(self, domains):
         threads = []
         for origin in domains:
-            for vt in EndpointType.value_list():
-                threads.append(threading.Thread(target=self.validate, args=(origin, vt)))
+            for vt in self.dbms.db_etypes():
+                threads.append(threading.Thread(target=self.validate, args=(origin, vt.etid)))
         for t in threads:
             t.daemon = True
             t.start()

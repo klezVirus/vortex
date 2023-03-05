@@ -3,6 +3,8 @@ import os
 import queue
 import threading
 import traceback
+from pathlib import Path
+
 from _queue import Empty
 from abc import ABC, abstractmethod
 from pydoc import locate
@@ -10,13 +12,17 @@ from pydoc import locate
 from colorama import Fore
 
 from db.handler import DBHandler
-from utils.utils import error, get_project_root, colors, info
+from db.utils.routines import Routine
+from utils.managers.memory import GroupManager
+from utils.notifiers.notify import Notifier
+from utils.utils import error, get_project_root, colors, info, choose
 
 
 class Action(ABC):
     def __init__(self, workspace):
         self.dbh = DBHandler(workspace=workspace)
-        self.commands = []
+        self.dbms = Routine(self.dbh)
+        self.commands = {}
         self.config = configparser.ConfigParser(allow_no_value=True, interpolation=configparser.ExtendedInterpolation())
         self.config.read(get_project_root().joinpath("config", "config.ini"))
         self.cli = colors(" $> ", Fore.GREEN)
@@ -24,20 +30,60 @@ class Action(ABC):
         self.__queue = queue.Queue()
         self.lock = threading.BoundedSemaphore(value=20)
         self.endpoints = []
+        self.required_args = []
         self.debug = False
+        self.no_child_process = False
+        self.sgm = GroupManager()
+
+    def enumerators(self):
+        _files = []
+        _dirs = self.__class__.__name__.lower()
+        if _dirs == "db":
+            _dirs = ["office", "vpn"]
+        else:
+            _dirs = [_dirs]
+        for _dir in _dirs:
+            for root, dirs, files in os.walk(get_project_root().joinpath("enumerators", _dir)):
+                for file in files:
+                    if Path(root).name not in _dirs:
+                        continue
+                    if file.endswith(".py") and not file.startswith("__"):
+                        if len(_dirs) > 1:
+                            _files.append(f"{_dir}.{file.replace('.py', '')}")
+                        else:
+                            _files.append(file.replace(".py", "").lower())
+        return _files
+
+    def searchers(self):
+        _files = []
+        _dirs = [self.__class__.__name__.lower()]
+        for _dir in _dirs:
+            for root, dirs, files in os.walk(get_project_root().joinpath("enumerators", _dir)):
+                for file in files:
+                    if Path(root).name not in _dirs:
+                        continue
+                    if file.endswith(".py") and not file.startswith("__"):
+                        if len(_dirs) > 1:
+                            _files.append(f"{_dir}.{file.replace('.py', '')}")
+                        else:
+                            _files.append(file.replace(".py", "").lower())
+        return _files
 
     def add_endpoint(self, enumerator, endpoint_type):
         self.lock.acquire()
         add = True
         for e in self.endpoints:
-            if e["endpoint"] == enumerator.target and endpoint_type == 1:
+            if e["target"] == enumerator.target and endpoint_type == 0:
                 add = False
                 break
         if add:
             self.endpoints.append({
-                "endpoint": enumerator.target,
-                "endpoint_type": endpoint_type,
-                "additional_info": enumerator.additional_info
+                "eid": 0,
+                "target": enumerator.target,
+                "etype_ref": endpoint_type,
+                "email_format": None,
+                "additional_info": enumerator.additional_info,
+                "nuclei-extracted": enumerator.nuclei.map
             })
         self.lock.release()
 
@@ -88,7 +134,7 @@ class Action(ABC):
 
     def choose_command(self):
         info("Select a command:")
-        return self.choose(self.commands)
+        return choose(self.commands)
 
     def choose(self, _list):
         choice = -1
@@ -111,7 +157,11 @@ class Action(ABC):
     python manage.py -w {kwargs['workspace']} db -c init 
             """)
         else:
-            self.execute(**kwargs)
+            try:
+                self.execute(**kwargs)
+            except KeyboardInterrupt:
+                error("Aborted by user")
+                exit(1)
 
     @abstractmethod
     def execute(self, **kwargs):

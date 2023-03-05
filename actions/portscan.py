@@ -1,18 +1,7 @@
 import queue
-import re
-import threading
-import timeit
-from _queue import Empty
 
-from db.dao.domain import DomainDao
-from db.dao.endpoint import EndpointDao
-from db.dao.etype import EtypeDao
-from db.enums.types import EndpointType
-from db.models.endpoint import Endpoint
-from enumerators.factories import VpnEnumeratorFactory, OfficeEnumeratorFactory
-from enumerators.parallel import DetectWorker
-from lib.Amass import Amass
-from lib.Sublist3r.sublist3r import main, PortScanner
+from actions.subdomain import Subdomain
+from lib.Sublist3r.sublist3r import PortScanner
 
 from actions.action import Action
 from utils.utils import *
@@ -21,7 +10,10 @@ from utils.utils import *
 class Portscan(Action):
     def __init__(self, workspace):
         super().__init__(workspace)
-        self.commands = ["vpn", "office"]
+        self.commands = {
+            "from_db": ["domain"],
+            "custom": ["url"]
+        }
         ttl = time_label()
         self.__temp_origins = str(get_project_root().joinpath("data", "temp", f"origins-{workspace}-{ttl}.csv"))
         self.__objects = queue.Queue()
@@ -44,179 +36,81 @@ class Portscan(Action):
     def execute(self, **kwargs):
         self.dbh.connect()
         command = kwargs.get("command")
-        if not command or command not in self.commands:
-            command = self.choose_command()
-
         _filter = kwargs.get("filter")
         _no_validate = kwargs.get("no_validate")
         ports = kwargs.get("ports")
         domain = kwargs.get("domain")
-        if domain is None:
-            error("Domain field is required")
-            info("Please provide a target domain")
-            domain = self.wait_for_input()
+        target = kwargs.get("url")
 
-        e_dao = EndpointDao(handler=self.dbh)
-        etype_dao = EtypeDao(handler=self.dbh)
-        d_dao = DomainDao(handler=self.dbh)
-
-        db_endpoints = [e.target for e in e_dao.list_all()]
 
         start = time.time()
-        m_domain_obj = d_dao.find_by_name(extract_domain(domain))
 
-        oracle = {
-            "domain": m_domain_obj,
-            "subdomains": {},
-            "endpoints": {}
-        }
+        if command == "from_db":
+            oracle = self.dbms.create_empty_oracle(domain)
+            info(f"Starting portscan against {highlight(domain)}")
+            db_domains = self.dbms.get_subdomains(domain, dfilter=_filter)
 
-        info(f"Starting portscan against {highlight(domain)}")
+            for d in db_domains:
+                oracle["subdomains"] = {d.name: d.additional_info_json}
 
-        if is_subdomain(domain):
-            db_domains = [d_dao.find_by_name(domain)]
-        elif domain == "*":
-            # Get all registered endpoints
-            db_domains = d_dao.list_all()
+            subdomains = [x.name for x in db_domains]
+            progress(f"Found {len(subdomains)} subdomains in the database")
+        elif command == "custom":
+            target, port = extract_target_port(target)
+            subdomains = [target]
+            if port:
+                ports = [port]
+            # We do some background checks on the target
+            if not self.dbms.exists_domain(target):
+                info(f"Target not found in the database, starting domain check")
+
+                fmt = self.dbms.get_email_format(target)
+                dd = Subdomain.resolve(target)
+                dt = Subdomain.takeover((target, dd[1]))
+                self.dbms.save_new_domain(
+                    did=0,
+                    name=target,
+                    email_format=fmt,
+                    dns=dd[1],
+                    frontable=dd[2],
+                    takeover=dt[1],
+                    additional_info=None
+                )
+
         else:
-            db_domains = d_dao.find_by_name_like(domain)
-
-        if _filter:
-            _fr = re.compile(_filter, re.IGNORECASE)
-            db_domains = [d for d in db_domains if _fr.search(d.name)]
-
-        for d in db_domains:
-            oracle["subdomains"] = {d.name: d.additional_info_json}
-
-        subdomains = [x.name for x in db_domains]
-        progress(f"Found {len(subdomains)} subdomains in the database", indent=2)
+            error("Unknown command")
+            return
         if not ports:
             ports = self.config.get("SCANNER", "ports")
 
         if not ports:
             ports = [443, 1443, 8443, 10443]
-        else:
+        elif isinstance(ports, str):
             ports = [int(p.strip()) for p in ports.split(",") if validate_port(p.strip())]
 
-        origins = [f"{d}:{p}" for d in subdomains for p in ports]
-        origins = [o for o in origins if not e_dao.exists_categorised(o)]
+        origins = self.dbms.diff_origins(subdomains, ports)
 
-        origins_to_scan = [o for o in origins if not e_dao.exists(o)]
+        info(f"Starting portscan against {highlight(target)}")
 
-        if len(origins_to_scan) > 0:
+        if len(origins) > 0:
             info(f"Enumerating potential VPN/MS endpoints (HTTP[S] on {', '.join([str(x) for x in ports])})")
-            scanner = PortScanner(origins=origins_to_scan)
+            scanner = PortScanner(origins=origins)
             scanner.run()
-            origins = scanner.origins
-            progress(f"Found {len(origins)} origins hosting a running service", indent=2)
+            info(f"Checking for SSL services (HTTPS) ...")
+            scanner.run_ssl()
+
+            origins_up = origins = scanner.origins
+            origins_down = [o for o in origins if o not in origins_up]
+            origins_ssl = [x for x in scanner.ssl_origins.keys() if scanner.ssl_origins.get(x)["ssl"]]
+
+            progress(f"Found {len(origins_up)} origins hosting a running service")
+            self.dbms.save_origins(
+                origins_up, origins_down, origins_ssl
+            )
             self.save(origins, self.__temp_origins)
-            debug(f"Elapsed time: {time.time() - start}", indent=2)
         else:
             info(f"All origins were already found in the DB. Skipping port scan.")
-            progress(f"Validating {len(origins)} in the DB", indent=2)
 
-        if not _no_validate:
-            if command == "vpn":
-                info(f"Trying to detect hosts with VPN web-login")
-                self.parallel_validate(domains=origins, **oracle)
-                progress(f"Found {len(self.endpoints)} hosts with a VPN web login", indent=2)
-
-            elif command == "office":
-                info(f"Trying to detect hosts with MS on premise web-login")
-                self.parallel_validate_office(domains=origins, **oracle)
-                progress(f"Found {len(self.endpoints)} hosts with a ME on-premise web login", indent=2)
-
-            debug(f"Elapsed time: {time.time() - start}", indent=2)
-        else:
-            info(f"Validation skipped.")
-        info(f"Updating DB...")
-        for endpoint in self.endpoints:
-            vpn_name = EndpointType.get_name(endpoint['endpoint_type'])
-            if not vpn_name:
-                vpn_etid = 1
-            else:
-                vpn_etid = etype_dao.find_by_name(vpn_name.upper()).etid
-
-            origin = endpoint['endpoint']
-            endpoint_info = None
-            if endpoint.get("additional_info"):
-                endpoint.get("additional_info", {}).get("Endpoint")
-
-            ep = Endpoint(
-                eid=0,
-                target=origin,
-                email_format=d_dao.get_email_format(extract_domain(origin)),
-                etype_ref=EndpointType.UNKNOWN.value,
-                additional_info=endpoint_info
-            )
-            if origin not in db_endpoints:
-                success(f"Adding {origin} as a {vpn_name} target", indent=2)
-                ep.etype_ref = vpn_etid
-            else:
-                error(f"{origin} already in the DB. Skipping", indent=2)
-            e_dao.save(ep)
-
-        progress(f"Elapsed time: {time.time() - start}", indent=2)
+        progress(f"Elapsed time: {time.time() - start}")
         success("Done")
 
-    def validate(self, origin, vpn_type):
-        vpn_name = EndpointType.get_name(vpn_type)
-        enumerator = VpnEnumeratorFactory.from_name(vpn_name, origin, group="dummy")
-        if enumerator is None:
-
-            return False
-        if enumerator is not None and enumerator.safe_validate():
-            self.add_endpoint(origin, vpn_type)
-            return True
-        return False
-
-    def parallel_validate(self, domains, **kwargs):
-        d = kwargs.get("domain")
-        for i in range(20):
-            thread = DetectWorker()
-            thread.threading_object = self
-            thread.daemon = True
-            thread.start()
-        for domain in domains:
-            e = kwargs.get("Endpoints", {}).get(domain)
-            domain_info = create_additional_info(domain=d, endpoint=e)
-            for vt in EndpointType.value_list():
-                vpn_name = EndpointType.get_name(vt)
-                enumerator = VpnEnumeratorFactory.from_name(vpn_name, domain, group="dummy")
-                if not enumerator:
-                    continue
-                enumerator.setup(**domain_info)
-                self.enqueue((enumerator, vt))
-        self.wait_threads()
-
-    def parallel_validate_office(self, domains, **kwargs):
-        d = kwargs.get("domain")
-
-        for i in range(20):
-            thread = DetectWorker()
-            thread.threading_object = self
-            thread.daemon = True
-            thread.start()
-        for domain in domains:
-            e = kwargs.get("endpoints", {}).get(domain)
-            domain_info = create_additional_info(domain=d, endpoint=e)
-            for vt in EndpointType.value_list():
-                vpn_name = EndpointType.get_name(vt)
-                enumerator = OfficeEnumeratorFactory.from_name(vpn_name, domain, group="dummy")
-                if not enumerator:
-                    continue
-                enumerator.setup(**domain_info)
-                self.enqueue((enumerator, vt))
-        self.wait_threads()
-
-    def parallel_validate2(self, domains):
-        threads = []
-        self.lock.acquire()
-        for origin in domains:
-            for vt in EndpointType.value_list():
-                threads.append(threading.Thread(target=self.validate, args=(origin, vt)))
-        for t in threads:
-            t.daemon = True
-            t.start()
-        for t in threads:
-            t.join()

@@ -1,165 +1,78 @@
 from actions.action import Action
+from db.dao.domain import DomainDao
+from db.dao.leak import LeakDao
 from db.dao.user import UserDao
-from db.handler import DBHandler
 from db.models.leak import Leak
 from db.models.user import User
-from lib.CrossLinked.crosslinked import crosslinked_run
-from lib.theHarvester.theHarvester import theHarvester
-from scripts.pwndb import PwnDB
-from utils.namemash import NameMasher
-from utils.utils import progress, info, success, error, get_project_root
+from enumerators.factories import SearcherFactory
+from utils.mashers.namemash import NameMasher
+from utils.utils import progress, info, success, error, get_project_root, listify
 
 
 class Search(Action):
     def __init__(self, workspace):
         super().__init__(workspace)
-        self.commands = ["linkedin", "pwndb", "google", "crosslinked"]
+        for s in self.searchers():
+            self.commands[s] = ["domain", "company", "email_format"]
+        self.no_child_process = True
 
     def execute(self, **kwargs):
         self.dbh.connect()
-        command = kwargs["command"]
-        if not command or command not in self.commands:
-            command = self.choose_command()
-
-        domains = kwargs["domain"]
-        location = kwargs["location"]
-        company = kwargs["company"]
-        config = kwargs["config"]
-
-        if domains is None:
-            error("Domain field is required")
-            info("Please enter a target domain")
-            domains = self.wait_for_input()
+        # change all kwargs[..] with kwargs.get(..)
+        command = kwargs.get("command")
+        domains = kwargs.get("domain")
+        location = kwargs.get("location")
+        title = kwargs.get("title")
+        company = kwargs.get("company")
+        current_company = kwargs.get("current_company")
+        config = kwargs.get("config")
+        otp = kwargs.get("otp")
+        email_format = kwargs.get("email_format")
+        _filter = kwargs.get("filter")
+        aws = kwargs.get("aws")
 
         # Listify the domain
-        if domains.find(",") > -1:
-            domains = domains.split(",")
-        else:
-            domains = [domains]
+        domains = listify(domains)
 
-        if command in ["linkedin", "crosslinked"] and company is None:
-            error("Company name field is required")
-            info("Please specify the company to search on LinkedIn")
-            company = self.wait_for_input()
+        masher = NameMasher()
+        masher.fmt = email_format
 
-        dao = UserDao(handler=self.dbh)
+        # Unified Argument List for Searchers
+        kwargs = {
+            "company": company,  # Company Name
+            "email_format": email_format,  # Email Format
+            "masher": masher,  # Name Masher
+            "domain": domains,
+            "location": location,
+            "current_company": current_company,
+            "title": title,
+            "filter": _filter,
+            "otp": otp,
+            "autosave": True,
+            "reset": False,
+            "aws": aws
+        }
 
-        if command == "linkedin":
-            # For LinkedIn, we need a masher
-            masher = NameMasher()
-            mail_format = self.dbh.get_email_format()
-            if not mail_format:
-                masher.select_format()
-                self.dbh.set_email_format(masher.fmt)
-            else:
-                masher.fmt = mail_format
+        searcher = SearcherFactory.from_name(command)
+        if searcher is None:
+            error("Error setting up the searcher")
+            return
+        searcher.setup(**kwargs)
 
-            info("Starting search on LinkedIn")
+        searcher.safe_search()
+
+        user_counter = 0
+        leak_counter = 0
+        for uu in searcher.uu_data:
             try:
-                from scripts.blues import LinkedIn
-            except ModuleNotFoundError:
-                error("Sorry, the LinkedIn module has been removed")
-                exit(1)
-            users = LinkedIn.execute_routine(company, location=location, config=config, reset=False)
-            progress(f"Found {len(users)} LinkedIn accounts!", indent=2)
-            info(f"Updating DB ...")
-            for u in users.employee_list:
-                if u.name.lower() == "linkedin member":
-                    continue
-
-                username = masher.mash(u.name.split(" ")[0], u.name.split(" ")[-1])
-                for domain in domains:
-                    email = f"{username}@{domain}"
-                    user = User(uid=0, name=u.name, username=username, email=email, role=u.role)
-                    dao.save(user)
-
-        elif command == "crosslinked":
-            # For CrossLinked, we need a masher
-            masher = NameMasher()
-            mail_format = self.dbh.get_email_format()
-            if not mail_format:
-                masher.select_format()
-                self.dbh.set_email_format(masher.fmt)
-            else:
-                masher.fmt = mail_format
-
-            kwargs = {
-                'debug': int(self.config.get("CROSSLINKED", "debug") == 1),
-                'timeout': float(self.config.get("CROSSLINKED", "timeout")),
-                'jitter': float(self.config.get("CROSSLINKED", "jitter") == 1),
-                'verbose': int(self.config.get("CROSSLINKED", "safe") == 1),
-                'company_name': company,
-                'header': [],
-                'engine': ['google', 'bing'],
-                'safe': int(self.config.get("CROSSLINKED", "safe") == 1),
-                'nformat':
-                    mail_format.
-                    replace("{0:.1}", "{f}").
-                    replace("{1:.1}", "{l}").
-                    replace("{0}", "{first}").
-                    replace("{1}", "{last}"),
-                'outfile': get_project_root().joinpath("data", "temp", self.config.get("CROSSLINKED", "outfile")),
-                'proxy': []
-            }
-
-            info("Starting search on Google and Bing with CrossLinked")
-            users = crosslinked_run(**kwargs)
-
-            progress(f"Found {len(users)} LinkedIn accounts!", indent=2)
-            info(f"Updating DB ...")
-            for u in users:
-                for domain in domains:
-                    username = masher.mash(u["first"], u["last"])
-                    email = f"{username}@{domain}"
-
-                    user = User(
-                        uid=0,
-                        name=f'{u["first"].capitalize()} {u["last"].capitalize()}',
-                        username=username,
-                        email=email,
-                        role=u["title"]
-                    )
-                    dao.save(user)
-
-        elif command == "pwndb":
-            info("Starting search on PwnDB")
-
-            users = PwnDB(
-                domain=domains,
-                socks_port=self.config.get("TOR", "socks_port")
-            ).fetch()
-            progress(f"Found {len(users)} leaked accounts!", indent=2)
-            info(f"Updating DB ...")
-            for u, leaks in users.items():
-                if not u or u.strip() == "":
-                    continue
-                for domain in domains:
-                    user = User(uid=0, name=None, username=u, email=f"{u}@{domain}", role=None)
-                    user.leaks = [Leak(leak_id=0, password=leak, uid=0) for leak in leaks]
-                    dao.save(user)
-        elif command == "google":
-            for domain in domains:
-                info(f"[*] Searching google for {domain}")
-                args = {
-                    'active': True,
-                    'data_source': 'google',
-                    'domain': domain,
-                    'search_max': 100,
-                    'save_emails': False,
-                    'delay': 15.0,
-                    'url_timeout': 60,
-                    'num_threads': 8
-                }
-                info("Starting passive/active search on Google")
-                th = theHarvester(**args)
-                mails = th.go()
-                progress(f"Found {len(mails)} mail accounts!", indent=2)
-                info(f"Updating DB ...")
-                for m in mails:
-                    if not m or m.strip() == "":
-                        continue
-                    u = m.split("@")[0]
-                    user = User(uid=0, name=None, username=u, email=m, role=None)
-                    dao.save(user)
+                uu.normalize(masher, domains[0])  # Normalize the data
+                uid = self.dbms.save_user_from_uudata(uu)  # Save the user
+                user_counter += 1
+                if any([x not in [None, ""] for x in [uu.password, uu.phash, uu.phone, uu.address]]):
+                    self.dbms.save_leak_from_uudata(uu, uid)
+                    leak_counter += 1
+            except Exception as e:
+                error(f"Exception: {e}")
+        success(f"{user_counter} users and {leak_counter} leaks inserted in the DB")
         success(f"Done!")
 

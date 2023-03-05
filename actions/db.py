@@ -7,21 +7,30 @@ import pandas as pd
 from tabulate import tabulate
 
 from actions.action import Action
-from db.enums.types import EndpointType
-from db.handler import DBHandler
-from utils.utils import error, info, warning, success, get_project_root
+from utils.utils import error, info, warning, success, get_project_root, fatal, highlight
 
 
 class Db(Action):
     def __init__(self, workspace):
         super().__init__(workspace=workspace)
-        self.commands = ["init", "sql", "add-endpoint", "add-user", "drop-user", "truncate-table", "found-logins", "export"]
+        self.commands = {
+            "init": [],
+            "sql": [],
+            "add-endpoint": [],
+            "add-user": [],
+            "drop-user": [],
+            "truncate-table": [],
+            "found-logins": [],
+            "show-info": ["domain"],
+            "export": [],
+            "check": [],
+        }
+        self.no_child_process = True
 
     def execute(self, **kwargs):
         self.dbh.connect()
         command = kwargs["command"]
-        if not command or command not in self.commands:
-            command = self.choose_command()
+        domain = kwargs.get("domain")
         if command == "init":
             if os.path.exists(self.dbh.db) and self.dbh.db_initialised():
                 error("The DB file exists and it was initialised, overwrite?")
@@ -55,13 +64,26 @@ class Db(Action):
     name text not null,
     level integer not null,
     email_format text default null,
+    dns text default null,
+    frontable text default null,
+    takeover text default null,
     additional_info text default null);''')
                 cursor.connection.commit()
                 cursor.execute(r'''
-    CREATE TABLE IF NOT EXISTS ip_address(
-    did integer not null,
+    CREATE TABLE IF NOT EXISTS host(
+    hid integer primary key AUTOINCREMENT,
+    hostname text not null,
     ip text not null,
-    PRIMARY KEY (did, ip));''')
+    geo_ref integer default null
+    );''')
+                cursor.connection.commit()
+                cursor.execute(r'''
+    CREATE TABLE IF NOT EXISTS origins(
+    oid integer primary key AUTOINCREMENT,
+    host text not null,
+    port text not null,
+    ssl integer default 0,
+    up integer default 1);''')
                 cursor.connection.commit()
                 cursor.execute(r'''
     CREATE TABLE IF NOT EXISTS endpoints(
@@ -79,12 +101,26 @@ class Db(Action):
     is_office integer not null default 0,
     is_o365 integer not null default 0);''')
                 cursor.connection.commit()
+                r"""
+                # ----------- F**k off this sh*t -------------
                 etypes = get_project_root().joinpath("config", "etypes.csv").absolute()
                 if not etypes.is_file():
                     error("Supported Endpoint Types config file was not found. Aborting.")
                     exit(1)
                 df = pandas.read_csv(str(etypes))
                 df.to_sql("etypes", cursor.connection, if_exists='append', index=False)
+                # --------------------------------------------
+                """
+                counter = 0
+                etypes = [{"etid": counter, "name": "UNKNOWN", "is_vpn": 0, "is_office": 0, "is_o365": 0}]
+                counter += 1
+                for enumerator in self.enumerators():
+                    _d, _f = enumerator.split(".")
+                    etypes.append({"etid": counter, "name": _f.upper(), "is_vpn": _d == "vpn", "is_office": _d == "office", "is_o365": _f.find("365") > -1})
+                    counter += 1
+                df = pandas.DataFrame(etypes)
+                df.to_sql("etypes", cursor.connection, if_exists='append', index=False)
+
                 cursor.execute(r'''
     CREATE TABLE IF NOT EXISTS leaks(
     lid integer primary key AUTOINCREMENT,
@@ -98,14 +134,38 @@ class Db(Action):
                 cursor.execute(r'''
     CREATE TABLE IF NOT EXISTS found_logins(
     login_id integer primary key AUTOINCREMENT,
-    url text not null,
+    realm text default "",
+    vgroup text default "",
     email text not null,
-    password text not null);''')
+    password text not null,
+    eid integer not null);''')
+                cursor.connection.commit()
+                cursor.execute(r'''
+    CREATE TABLE IF NOT EXISTS attempts(
+    attempt_id integer primary key AUTOINCREMENT,
+    user_id integer not null,
+    etype_ref integer not null,
+    realm text default "",
+    vgroup text default "",
+    username text not null,
+    password text not null,
+    url text not null,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);''')
+                cursor.connection.commit()
+                cursor.execute(r'''
+    CREATE TABLE IF NOT EXISTS aws_api(
+    aid integer primary key AUTOINCREMENT,
+    api_id text not null,
+    region text not null,
+    url text not null,
+    proxy_url text not null,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);''')
                 cursor.connection.commit()
                 cursor.execute(r'''
     CREATE TABLE IF NOT EXISTS config(
     cid integer primary key,
-    email_format text not null);''')
+    email_format text not null,
+    aws_prefix text not null);''')
         elif command == "sql":
             sql = kwargs["sql"]
             if not sql:
@@ -127,9 +187,8 @@ class Db(Action):
             vpn = kwargs["endpoint_type"]
             if not vpn:
                 warning("DEPRECATED: Please consider using action `vpn -c add` to add an endpoint manually")
-                info("Please provide an endpoint type")
-                vpn = self.choose(EndpointType.key_list())
-            endpoint_type = EndpointType.from_name(vpn)
+                fatal("Please specify a VPN type")
+            endpoint_type = self.dbms.get_etype_id(vpn)
             if endpoint_type is None:
                 error(f"{vpn} is not a valid VPN type")
                 exit(1)
@@ -181,6 +240,30 @@ class Db(Action):
                 for row in cursor:
                     table.append(list(row))
             print(tabulate(table, headers=["ID", "Target", "E-Mail", "Password"]))
+
+        elif command == "show-info":
+            cmd = f"python vortex.py -w {self.dbh.workspace} office -c show -D {domain}"
+            info(f"To show MS related information, execute "
+                 f"`{highlight(cmd)}`"
+                 f"")
+            cmd = f"python vortex.py -w {self.dbh.workspace} vpn -c show -D {domain}"
+            info(f"To show VPN related information, execute "
+                 f"`{highlight(cmd)}`"
+                 f"")
+            cmd = f"python vortex.py -w {self.dbh.workspace} subdomain -c show -D {domain}"
+            info(f"To show DNS related information, execute "
+                 f"`{highlight(cmd)}`"
+                 f"")
+            success(f"Showing Info for domain {domain}:")
+            domain = f'%{domain}%'
+            sql = "SELECT name, email_format, frontable, takeover FROM domains where name LIKE ?"
+            args = (domain, )
+            tables = []
+            with self.dbh.create_cursor() as cursor:
+                cursor.execute(sql, args)
+                for table in cursor:
+                    tables.append(table)
+            print(tabulate(tables, headers=["Domain", "Email Format", "Fronting Possible", "Takeover Possible"], tablefmt="fancy_grid"))
 
         elif command == "drop-table":
             tables = []
@@ -277,14 +360,14 @@ class Db(Action):
 
             with self.dbh.create_cursor() as cursor:
                 cursor.execute(f"SELECT {column} FROM `{table}`")
-                with open(export, "w") as csvfile:
+                with open(export, "w", encoding="latin-1", errors="replace") as csvfile:
                     if not no_headers:
                         csvfile.write(column.replace("`", "") + "\n")
-                    for c in cursor:
+                    for record in cursor:
                         if quotes:
-                            csvfile.write('"' + '","'.join(c) + '"\n')
+                            csvfile.write('"' + '","'.join([f"{record[column_index]}" for column_index in range(len(record))]) + '"\n')
                         else:
-                            csvfile.write(','.join(c) + '\n')
+                            csvfile.write(','.join([f"{record[column_index]}" for column_index in range(len(record))]) + '\n')
 
         else:
             NotImplementedError(f"Action {command} not implemented")

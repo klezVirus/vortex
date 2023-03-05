@@ -14,7 +14,7 @@ class Tor(Action):
     def __init__(self, workspace=None):
         super().__init__(workspace)
         self.win = os.name == "nt"
-        self.commands = ["start", "stop", "install", "change-pwd"]
+        self.commands = {"start": [], "stop": [], "install": [], "change-pwd": []}
         if self.win:
             self.tor = get_project_root().joinpath("tor", "TorBrowser", "Tor", "tor.exe").absolute()
             self.tor_rc = get_project_root().joinpath("tor", "torrc").absolute()
@@ -97,9 +97,6 @@ CookieAuthentication 1
 
     def execute(self, **kwargs):
         command = kwargs["command"]
-        if not command or command not in self.commands:
-            command = self.choose_command()
-
         if command == "start":
             if self.win:
                 info("Starting TOR Browser, click on connect")
