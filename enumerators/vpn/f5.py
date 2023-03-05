@@ -1,37 +1,20 @@
-import base64
 import os
-from threading import Thread
 
-import requests
-
-from enumerators.enumerator import VpnEnumerator
+from enumerators.interfaces.enumerator import VpnEnumerator
 from bs4 import BeautifulSoup
 
-from utils.utils import time_label, logfile, get_project_root, warning, debug, error
+from utils.utils import logfile, get_project_root, error
 
 
 class F5Enumerator(VpnEnumerator):
     def __init__(self, target, group=None):
         super().__init__()
-        self.target = target.strip()
+        self.urls = [f"{target.strip()}"]
         self.group = None
         self.select_group(group=group)
 
-    def setup(self, **kwargs):
-        pass
-
-    def logfile(self) -> str:
-        fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data", "log").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
-
-    def validate(self) -> tuple:
-        url = f"https://{self.target}"
-        res = self.session.get(url, timeout=5)
-        my_policy = any([r.headers.get("Location").find("my.policy") > -1 for r in res.history if r.headers.get("Location")])
-        return res.status_code == 200 and my_policy, res
-
     def find_groups(self):
-        url = f"https://{self.target}/my.policy"
+        url = f"{self.target}/my.policy"
         res = self.session.get(url)
         if res.status_code != 200:
             error(f"{self.__class__.__name__}: Failed to enumerate groups")
@@ -47,17 +30,18 @@ class F5Enumerator(VpnEnumerator):
             if group:
                 self.group = group["value"]
 
-    def login(self, username, password) -> tuple:
-        url = f"https://{self.target}/my.policy"
+    def login(self, username, password, **kwargs) -> tuple:
+        group = kwargs.get("group")
+        url = f"{self.target}/my.policy"
 
-        self.session.headers["Origin"] = f"https://{self.target}"
-        self.session.headers["Referer"] = f"https://{self.target}/my.policy"
+        self.session.headers["Origin"] = f"{self.target}"
+        self.session.headers["Referer"] = f"{self.target}/my.policy"
 
         data = {
             "username": "test",
             "password": "test",
-            "vhost": self.group
+            "vhost": group
         }
 
         res = self.session.post(url, data=data)
-        return res.text.find("The username or password is not correct.") < 0, res
+        return res.text.find("The username or password is not correct.") < 0, res, username, password, group

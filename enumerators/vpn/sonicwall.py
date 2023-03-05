@@ -1,18 +1,16 @@
 import os
 import re
 
-import requests
-
-from enumerators.enumerator import VpnEnumerator
+from enumerators.interfaces.enumerator import VpnEnumerator
 from bs4 import BeautifulSoup
 
-from utils.utils import time_label, logfile, get_project_root, error, info
+from utils.utils import logfile, get_project_root, error, info
 
 
 class SonicwallEnumerator(VpnEnumerator):
     def __init__(self, target, group="dummy"):
         super().__init__()
-        self.target = target.strip()
+        self.urls = [f"{target.strip()}"]
         self.dssignin = "url_default"
         self.__auth_url = None
         self.__groups = None
@@ -20,40 +18,18 @@ class SonicwallEnumerator(VpnEnumerator):
             self.set_auth_url()
             self.select_group(group)
 
-    def setup(self, **kwargs):
-        pass
-
-    def logfile(self) -> str:
-        fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data", "log").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
-
-    def validate(self) -> tuple:
-        res = self.set_auth_url()
-        if len(res.history) == 0:
-            return False, res
-        locations = []
-        for r in res.history:
-            location = r.headers.get("Location")
-            if not location:
-                continue
-            locations.append(location)
-        return any([location.find("__extraweb__") >= 0 for location in locations]), res
-
     def set_auth_url(self):
-        url = f"https://{self.target}"
+        url = f"{self.target}"
         res = self.session.get(url, timeout=5)
         self.__auth_url = res.url
         return res
 
     def find_groups(self):
-        url = f"https://{self.target}/dana-na/auth/{self.dssignin}/welcome.cgi"
+        url = f"{self.target}/sslvpnLogin.html"
         res = self.session.get(url)
         if res.status_code != 200:
             error(f"{self.__class__.__name__}: Failed to enumerate groups")
             return
-        if len(res.history) > 0:
-            if "location" in [h.lower() for h in res.history[-1].headers.keys()]:
-                self.dssignin = res.history[-1].headers["Location"].split("/")[3]
         soup = BeautifulSoup(res.text, features="html.parser")
         options = soup.find_all("option")
         if len(options) == 0:
@@ -85,7 +61,8 @@ class SonicwallEnumerator(VpnEnumerator):
                 pass
         self.group = groups[choice]
 
-    def login(self, username, password) -> tuple:
+    def login(self, username, password, **kwargs) -> tuple:
+        group = kwargs.get("group", "N/A")
         url = self.__auth_url
 
         res = self.session.get(url)
@@ -94,22 +71,22 @@ class SonicwallEnumerator(VpnEnumerator):
         data = {
             "data_0": username,
             "data_1": password,
-            "id": soup.find("input", {"name": "id"}),
-            "alias": soup.find("input", {"name": "alias"}),
-            "resource": soup.find("input", {"name": "resource"}),
-            "method": soup.find("input", {"name": "method"}),
-            "nodeID": soup.find("input", {"name": "nodID"})
+            "id": soup.find("input", {"name": "id"}).get("value") if soup.find("input", {"name": "id"}) else "",
+            "alias": soup.find("input", {"name": "alias"}).get("value") if soup.find("input", {"name": "alias"}) else "",
+            "resource": soup.find("input", {"name": "resource"}).get("value") if soup.find("input", {"name": "resource"}) else "",
+            "method": soup.find("input", {"name": "method"}).get("value") if soup.find("input", {"name": "method"}) else "",
+            "nodeID": soup.find("input", {"name": "nodID"}).get("value") if soup.find("input", {"name": "nodeID"}) else ""
         }
 
         headers = self.__headers
-        headers["Origin"] = f"https://{self.target}"
+        headers["Origin"] = f"{self.target}"
         headers["Referer"] = self.__auth_url
 
         res = self.session.post(url, headers=headers, data=data)
         soup = BeautifulSoup(res.text, features="html.parser")
         element = soup.find("span", {"class": "bodytext error"})
 
-        return element is None, res
+        return element is None, res, username, password, group
 
         # Probably too restrictive
         # Needs more testing against SonicWall endpoints

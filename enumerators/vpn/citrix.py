@@ -1,22 +1,20 @@
 import json
 import os
 
-import requests
 import xmltodict
 
-from enumerators.enumerator import VpnEnumerator
+from enumerators.interfaces.enumerator import VpnEnumerator
 from bs4 import BeautifulSoup
 
-from utils.utils import time_label, logfile, get_project_root, error, info
+from utils.utils import logfile, get_project_root, error, info
 
 
 class CitrixEnumerator(VpnEnumerator):
     def __init__(self, target, group="dummy"):
         super().__init__()
-        self.target = target.strip()
+        self.urls = [f"{target.strip()}"]
         self.encrypt = False
         self.session.headers["X-Citrix-Isusinghttps"] = "Yes"
-        self.group = group
         self.auth_url = None
         self.auth_method = None
         self.data = {}
@@ -24,29 +22,14 @@ class CitrixEnumerator(VpnEnumerator):
             self.select_auth_method()
             self.fetch_auth_configuration()
 
-    def setup(self, **kwargs):
-        pass
-
-    def logfile(self) -> str:
-        fmt = os.path.basename(self.config.get("LOGGING", "file"))
-        return str(get_project_root().joinpath("data", "log").joinpath(logfile(fmt=fmt, script=self.__class__.__name__)))
-
-    def validate(self) -> tuple:
-        url = f"https://{self.target}/logon/LogonPoint/index.html"
-        res = self.session.get(url, timeout=5)
-        if res.status_code != 200:
-            return False, res
-        soup = BeautifulSoup(res.text, features="html.parser")
-        element = soup.find_all("span", {"class": "citrixCopyright _ctxstxt_CitrixCopyright"})
-        # New version of Citrix Identified
-        return len(element) > 0 and len(res.history) == 0 and res.url == url, res
-
     def fetch_auth_configuration(self):
-        url = f"https://{self.target}{self.auth_method}"
-        self.session.headers["Origin"] = f"https://{self.target}"
+        url = f"{self.target}{self.auth_method}"
+        self.session.headers["Origin"] = f"{self.target}"
         res = self.session.post(url)
         try:
+
             xml_content = xmltodict.parse(res.content)
+
             for x in xml_content["AuthenticateResponse"]["AuthenticationRequirements"]["Requirements"]["Requirement"]:
                 if "Credential" not in x or "Input" not in x:
                     continue
@@ -65,7 +48,7 @@ class CitrixEnumerator(VpnEnumerator):
             error(f"{self.__class__.__name__}: Unable to gather login parameters")
 
     def check_encryption(self):
-        url = f"https://{self.target}/nf/auth/getECdetails"
+        url = f"{self.target}/nf/auth/getECdetails"
         res = self.session.get(url)
         body = None
         try:
@@ -98,7 +81,7 @@ class CitrixEnumerator(VpnEnumerator):
             self.auth_method = urls[choice]["url"]
 
     def find_auth_methods(self):
-        url = f"https://{self.target}/cgi/GetAuthMethods"
+        url = f"{self.target}/cgi/GetAuthMethods"
         res = self.session.post(url)
         auth_urls = []
         try:
@@ -111,7 +94,7 @@ class CitrixEnumerator(VpnEnumerator):
         return auth_urls
 
     def find_groups(self):
-        url = f"https://{self.target}/logon/LogonPoint/index.html"
+        url = f"{self.target}/logon/LogonPoint/index.html"
         res = self.session.get(url)
         if res.status_code != 200:
             error(f"{self.__class__.__name__}: Failed to enumerate groups")
@@ -123,24 +106,9 @@ class CitrixEnumerator(VpnEnumerator):
             exit(1)
         return [o["value"] for o in options]
 
-    def select_group(self):
-        groups = self.find_groups()
-        info("Select a VPN group:")
-        choice = -1
-
-        for n, g in enumerate(groups, start=0):
-            print(f"{n} : {g}")
-        while choice < 0 or choice > len(groups) - 1:
-            try:
-                choice = int(input("  $> "))
-            except KeyboardInterrupt:
-                exit(1)
-            except ValueError:
-                pass
-        self.group = groups[choice]
-
-    def login(self, username, password) -> tuple:
-        url = f"https://{self.target}/p/u/doAuthentication.do"
+    def login(self, username, password, **kwargs) -> tuple:
+        group = kwargs.get("group", "N/A")
+        url = f"{self.target}/p/u/doAuthentication.do"
         self.session.headers["X-Citrix-Am-Labeltypes"] = "none, plain, heading, information, warning, error, " \
                                                          "confirmation, image, nsg-epa, nsg-epa-failure, " \
                                                          "nsg-login-label, tlogin-failure-msg, nsg-tlogin-heading, " \
@@ -177,7 +145,7 @@ class CitrixEnumerator(VpnEnumerator):
                             success = False
                             break
             except:
-                return False, res
-            return success, res
+                return False, res, username, password, group
+            return success, res, username, password, group
         else:
-            return False, res
+            return False, res, username, password, group
