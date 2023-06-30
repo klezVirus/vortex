@@ -570,8 +570,12 @@ class Linkedin2usernames(Searcher):
                 self.validate_session()
             except LinkedInSessionExpired:
                 info("Logging in")
-                self.login()
+                r = self.login()
                 time.sleep(2)
+                if not r:
+                    error("Login failed")
+                    return 
+
             info("Collecting employees data")
             if isinstance(self.name_filter, str):
                 _filter = [x.strip() for x in self.name_filter.split(",")]
