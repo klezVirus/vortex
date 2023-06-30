@@ -19,14 +19,11 @@ unidecode
 tabulate
 dnsgen
 tldextract
-argparse
 beautifulsoup4
-setuptools
-urllib3
 boto3
 random-user-agent
 pyotp
-maigret
+# maigret
 reports
 bokeh
 geopandas
@@ -34,3 +31,6 @@ libpysal
 mapclassify
 python-whois
 nameparser
+discordwebhook
+selenium
+selenium-wire
