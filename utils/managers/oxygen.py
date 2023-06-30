@@ -2,6 +2,7 @@ import configparser
 from typing import Union, Any
 
 import boto3
+import requests.exceptions
 from tabulate import tabulate
 
 from lib.Sublist3r.sublist3r import PortScanner
@@ -14,10 +15,6 @@ from datetime import timedelta
 
 class OxyManager:
     def __init__(self, **kwargs):
-        self.client = boto3.client('ec2')
-        self.credentials = {"accounts": []}
-        self.config = configparser.ConfigParser(allow_no_value=True, interpolation=configparser.ExtendedInterpolation())
-        self.config.read(str(get_project_root().joinpath("config", ".aws", "credentials")))
         self.globals = configparser.ConfigParser(allow_no_value=True,
                                                  interpolation=configparser.ExtendedInterpolation())
         self.globals.read(str(get_project_root().joinpath("config", "config.ini")))
@@ -30,6 +27,7 @@ class OxyManager:
         except Exception as e:
             error(f"Error loading proxy file: {e}")
         self.load_proxies()
+        self.check_status()
 
         self.__timer = timer()
 
@@ -50,18 +48,35 @@ class OxyManager:
                     if x and x.strip() != "" and x.find("://") > -1
                 ]
 
+    def try_proxy(self, proxy):
+        if proxy is None:
+            return False
+        try:
+            r = requests.get("https://example.com", proxies={"http": proxy, "https": proxy}, verify=False)
+        except requests.exceptions.ProxyError:
+            return False
+        except:
+            pass
+        return True
+
     def check_status(self):
         result_table = []
-        origins = [proxy.split("://")[1] for proxy in self.proxies]
+        proxies = {}
+        for proxy in self.proxies:
+            proxies[proxy.split("://")[1]] = proxy
+
+        origins = list(proxies.keys())
         scanner = PortScanner(origins=origins)
+
         scanner.run()
         counter = 0
         for o in origins:
-            if o in scanner.origins:
+            if o in scanner.origins and self.try_proxy(proxies.get(o)):
                 result_table.append([o, "OK"])
             else:
                 result_table.append([o, "FAIL*"])
                 _ = self.proxies.pop(counter)
+                counter -= 1
                 if _.find(o) == -1:
                     raise Exception(f"Proxy {o} not found in proxy list")
             counter += 1
