@@ -49,7 +49,7 @@ class DomainDiscovery:
         self.session = requests.session()
         self.session.verify = False
         self.session.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:94.0) Gecko/20100101 Firefox/94.0",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/114.0",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
             "Accept-Language": "it-IT,it;q=0.8,en-US;q=0.5,en;q=0.3",
             "Accept-Encoding": "gzip, deflate",
@@ -445,7 +445,8 @@ class DomainDiscovery:
             }
             r = self.session.get(
                 url=url,
-                headers=headers
+                headers=headers,
+                timeout=0.3
             )
             response_headers = r.headers
             rhk = [h.lower() for h in r.headers]
