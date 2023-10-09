@@ -56,12 +56,19 @@ class FireProx(object):
         try:
             with self.client_lock:
                 if not self.region:
-                    self.client = boto3.client('apigateway', config=self.client_config)
+                    self.client = boto3.client(
+                        'apigateway',
+                        config=self.client_config,
+                        aws_access_key_id=self.access_key,
+                        aws_secret_access_key=self.secret_access_key
+                    )
                 else:
                     self.client = boto3.client(
                         'apigateway',
                         region_name=self.region,
-                        config=self.client_config
+                        config=self.client_config,
+                        aws_access_key_id=self.access_key,
+                        aws_secret_access_key=self.secret_access_key
                     )
                 self.client.get_account()
                 self.region = self.client._client_config.region_name

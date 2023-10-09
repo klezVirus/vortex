@@ -26,8 +26,10 @@ class OxyManager:
             self.proxy_file = Path(self.globals.get("NETWORK", "proxy_file"))
         except Exception as e:
             error(f"Error loading proxy file: {e}")
-        self.load_proxies()
-        self.check_status()
+
+        if self.proxy_enabled:
+            self.load_proxies()
+            self.check_status()
 
         self.__timer = timer()
 
@@ -67,7 +69,8 @@ class OxyManager:
 
         origins = list(proxies.keys())
         scanner = PortScanner(origins=origins)
-
+        scanner.action = scanner.port_scan_list
+        
         scanner.run()
         counter = 0
         for o in origins:

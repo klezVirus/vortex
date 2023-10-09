@@ -17,7 +17,6 @@ from datetime import timedelta
 
 class AWSManager:
     def __init__(self, **kwargs):
-        self.client = boto3.client('ec2')
         self.credentials = {"accounts": []}
         self.regions = [
             "us-east-2", "us-east-1", "us-west-1", "us-west-2", "eu-west-3",
@@ -50,7 +49,7 @@ class AWSManager:
         self.access_key = None
         self.secret_access_key = None
         self.session_token = None
-        self.profile_name = None
+        self.profile_name = profile
 
         self.load_credentials(profile)
         self.apis: list = []
@@ -118,7 +117,7 @@ class AWSManager:
         self.access_key = self.config.get(profile, "aws_access_key_id")
         self.secret_access_key = self.config.get(profile, "aws_secret_access_key")
         self.session_token = self.config.get(profile, "aws_session_token")
-        self.profile_name = self.config.get(profile, "aws_profile_name")
+        self.profile_name = profile
 
     def load_apis(self, url, region=None):
 
