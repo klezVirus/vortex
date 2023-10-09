@@ -895,7 +895,7 @@ class PortScanner:
         self.ssl_origins = {}
         for origin in self.origins:
             self.ssl_origins[origin] = {"ssl": False, "subject": None}
-
+    
     def reset_ssl_origins(self):
         """
         This method is necessary to reset the ssl_origins dict after a port scan

@@ -30,9 +30,11 @@ def banner():
     '''.format(version, printx.highlight(author, fg='gray')), fg='blue')
 
 
-class CrossLinked():
-    URL = {'google': 'https://www.google.com/search?q=site:linkedin.com/in+"{}"&num=100&start={}',
-           'bing': 'http://www.bing.com/search?q=site:linkedin.com/in+"{}"&first={}'}
+class CrossLinked:
+    URL = {
+        'google': 'https://www.google.com/search?q=site:linkedin.com/in+"{}"&num=100&start={}',
+        'bing': 'http://www.bing.com/search?q=site:linkedin.com/in+"{}"&first={}'
+    }
 
     def __init__(self, engine, company, timeout, conn_timeout, headers=None, proxies=None, jitter=1, safe=False,
                  debug=False, masher=None):
@@ -46,6 +48,7 @@ class CrossLinked():
         self.debug = debug
         self.safe = safe
         self.jitter = jitter
+        self.cookies = {'CONSENT': 'YES'}
 
         self.engine = engine
         self.company = company
@@ -68,7 +71,13 @@ class CrossLinked():
 
             found_links = self.page_links
             search_url = self.generateURL()
-            resp = web_request(search_url, timeout=self.conn_timeout, headers=self.headers, proxies=self.proxies)
+            resp = web_request(
+                search_url,
+                timeout=self.conn_timeout,
+                headers=self.headers,
+                proxies=self.proxies,
+                cookies=self.cookies
+            )
 
             if get_statuscode(resp) != 0:
                 self.user_output(resp)
@@ -103,10 +112,10 @@ class CrossLinked():
                 pass
 
     def extract_linkedin(self, link, company_name):
-        '''
+        """
         Primary method responsible to parsing name from link string in
         search results. This is a hot mess @todo covert 2 regex!
-        '''
+        """
         if self.safe and company_name.lower() not in link.text.lower():
             return False
 

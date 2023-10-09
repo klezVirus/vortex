@@ -27,6 +27,7 @@ substitution = True
 from os import path, remove
 from sys import exit
 
+
 def outfile_prep():
     # check if file exists and prompt user to delete
     if path.exists(outfile):
@@ -36,8 +37,9 @@ def outfile_prep():
             exit(0)
         remove(outfile)
 
+
 def main():
-    basemod = []  
+    basemod = []
     outfile_prep()
     print('\n[*] Generating password combinations')
 
@@ -167,6 +169,7 @@ def main():
     openFile.close()
 
     print("\n[+] Password list complete!\n")
+
 
 if __name__ == '__main__':
     VERSION = "0.0.2"
