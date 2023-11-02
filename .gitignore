@@ -1,6 +1,6 @@
 __pycache__
 .idea
-wiki/
+wikia/
 *.db
 !tor/
 zzz_doosan/

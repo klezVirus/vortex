@@ -2,6 +2,14 @@
 
 VPN Overall Reconnaissance, Testing, Enumeration and Exploitation Toolkit
 
+![Vortex](images/Vortex_red_black.svg)
+
+## Official Discord Channel (Inceptor)
+
+Come hang out on Discord!
+
+[![Inceptor](https://discordapp.com/api/guilds/1155753953108164628/widget.png?style=banner2)](https://discord.gg/Z66VdyCv)
+
 ## Overview
 
 A very simple Python framework, inspired by [SprayingToolkit][1], that tries to 
